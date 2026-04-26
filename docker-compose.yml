@@ -1,0 +1,13 @@
+services:
+  addon:
+    build: .
+    container_name: context-aware-stremio-subtitles
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "7001:7001"
+    volumes:
+      - ./data:/app/data
+      # Mount your CAT checkout if CAT_CLI_CMD uses uv --directory inside the container.
+      # - /home/mini/context-aware-translation:/cat:ro

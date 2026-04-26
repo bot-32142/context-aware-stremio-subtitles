@@ -1,0 +1,18 @@
+{
+  "name": "context-aware-stremio-subtitles",
+  "version": "0.1.0",
+  "description": "LAN-hosted Stremio subtitle addon that fetches subtitles and translates them through cat-cli.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "jszip": "^3.10.1"
+  }
+}
