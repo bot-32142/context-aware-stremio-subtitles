@@ -1,6 +1,8 @@
-const JSZip = require("jszip");
 const { normalizeLanguageCode } = require("./languages");
-const { detectSubtitleFormat, inferFormatFromName } = require("./subtitleFormat");
+const { extractSubtitleFromArchive, isArchive } = require("./archiveExtractor");
+const { detectAndConvertEncoding } = require("./encodingDetector");
+const { analyzeResponseContent } = require("./responseAnalyzer");
+const { detectSubtitleFormat, inferFormatFromName, normalizeSubtitleFormat } = require("./subtitleFormat");
 
 const BASE_URL = "https://opensubtitles-v3.strem.io/subtitles";
 
@@ -17,8 +19,13 @@ function decodeFileId(fileId) {
 class OpenSubtitlesV3Provider {
   constructor({ timeoutMs = 12000, fetchImpl = globalThis.fetch } = {}) {
     if (typeof fetchImpl !== "function") throw new Error("A fetch implementation is required.");
+    this.name = "opensubtitles-v3";
     this.timeoutMs = timeoutMs;
     this.fetch = fetchImpl;
+  }
+
+  canDownload(fileId) {
+    return String(fileId || "").startsWith("v3_");
   }
 
   async search(mediaInfo, languages = []) {
@@ -40,7 +47,7 @@ class OpenSubtitlesV3Provider {
       .filter(subtitle => subtitle && (!requested.size || requested.has(subtitle.languageCode)));
   }
 
-  async download(fileId) {
+  async download(fileId, options = {}) {
     const url = decodeFileId(fileId);
     const response = await fetchWithTimeout(this.fetch, url, {
       headers: { Accept: "*/*" },
@@ -50,12 +57,18 @@ class OpenSubtitlesV3Provider {
       throw new Error(`OpenSubtitles V3 download failed with HTTP ${response.status}.`);
     }
     const bytes = Buffer.from(await response.arrayBuffer());
-    const extracted = await extractSubtitlePayload(bytes, url);
-    const content = stripUtf8Bom(extracted.bytes.toString("utf8"));
+    const extracted = isArchive(bytes)
+      ? await extractSubtitleFromArchive(bytes, {
+          providerName: "OpenSubtitles V3",
+          sourceName: url,
+          languageHint: options.languageHint
+        })
+      : decodePayload(bytes, url, options);
+    const content = extracted.content;
     if (!content.trim()) throw new Error("Downloaded subtitle is empty.");
     return {
       content,
-      format: detectSubtitleFormat(content, inferFormatFromName(extracted.name || url)),
+      format: normalizeSubtitleFormat(extracted.format || detectSubtitleFormat(content, inferFormatFromName(extracted.name || url))),
       sourceUrl: url
     };
   }
@@ -108,51 +121,17 @@ function inferNameFromUrl(url) {
   }
 }
 
-function stripUtf8Bom(value) {
-  return String(value || "").replace(/^\uFEFF/, "");
-}
-
-async function extractSubtitlePayload(bytes, sourceName) {
-  if (isZip(bytes)) {
-    return extractSubtitleFromZip(bytes);
+function decodePayload(bytes, sourceName, options = {}) {
+  const analysis = analyzeResponseContent(bytes);
+  if (analysis.type !== "subtitle" && analysis.type !== "unknown") {
+    throw new Error(`OpenSubtitles V3 returned ${analysis.type}: ${analysis.hint}`);
   }
-  if (isKnownArchive(bytes)) {
-    throw new Error("Downloaded subtitle is an archive format this addon cannot extract yet.");
-  }
-  return { bytes, name: sourceName };
-}
-
-async function extractSubtitleFromZip(bytes) {
-  const zip = await JSZip.loadAsync(bytes);
-  const candidates = [];
-  zip.forEach((name, file) => {
-    if (file.dir || name.startsWith("__MACOSX/")) return;
-    const match = name.toLowerCase().match(/\.([a-z0-9]+)$/);
-    const format = match ? match[1] : "";
-    if (!["srt", "vtt", "ass", "ssa"].includes(format)) return;
-    candidates.push({ name, file, format });
-  });
-  candidates.sort((a, b) => archiveFormatPriority(a.format) - archiveFormatPriority(b.format) || a.name.localeCompare(b.name));
-  const selected = candidates[0];
-  if (!selected) throw new Error("Downloaded archive did not contain a supported subtitle file.");
+  const content = detectAndConvertEncoding(bytes, "OpenSubtitles V3", options.languageHint || null);
   return {
-    bytes: await selected.file.async("nodebuffer"),
-    name: selected.name
+    content,
+    format: detectSubtitleFormat(content, inferFormatFromName(sourceName)),
+    name: sourceName
   };
-}
-
-function archiveFormatPriority(format) {
-  return { srt: 0, vtt: 1, ass: 2, ssa: 3 }[format] ?? 99;
-}
-
-function isZip(bytes) {
-  return bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04;
-}
-
-function isKnownArchive(bytes) {
-  if (isZip(bytes)) return true;
-  const signature = bytes.subarray(0, 8).toString("latin1");
-  return signature.startsWith("Rar!\x1A\x07") || signature.startsWith("7z\xBC\xAF\x27\x1C") || (bytes[0] === 0x1f && bytes[1] === 0x8b);
 }
 
 module.exports = {

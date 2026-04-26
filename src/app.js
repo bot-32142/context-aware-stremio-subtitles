@@ -4,7 +4,8 @@ const { BookRegistry } = require("./bookRegistry");
 const { CatCli } = require("./catCli");
 const { getLanguageName, normalizeLanguageCode } = require("./languages");
 const { mediaContextKey, parseStremioId } = require("./media");
-const { OpenSubtitlesV3Provider } = require("./openSubtitlesV3");
+const { ProviderManager } = require("./providers");
+const { finalizeSubtitleResults, rankAndLimitSubtitles } = require("./subtitleRanking");
 const { contentTypeForFormat } = require("./subtitleFormat");
 const { TranslationManager } = require("./translationManager");
 const { resolveBaseUrl } = require("./config");
@@ -25,7 +26,7 @@ function createApp({ config, provider, registry, catCli, translationManager } = 
     next();
   });
 
-  const resolvedProvider = provider || new OpenSubtitlesV3Provider({ timeoutMs: config.providerTimeoutMs });
+  const resolvedProvider = provider || new ProviderManager({ config });
   const resolvedRegistry = registry || new BookRegistry(path.join(config.dataDir, "book-registry.json"));
   const resolvedCatCli =
     catCli ||
@@ -110,7 +111,8 @@ function createApp({ config, provider, registry, catCli, translationManager } = 
         sourceFileId: req.params.sourceFileId,
         targetLanguage,
         mediaInfo,
-        filename: req.query.filename || ""
+        filename: req.query.filename || "",
+        sourceLanguage: req.query.sourceLang || ""
       });
       setNoStore(res);
       res.setHeader("Content-Type", contentTypeForFormat(result.format));
@@ -143,13 +145,12 @@ async function handleSubtitles(req, res, { config, provider }) {
   const searchLanguages = [...new Set([...config.sourceLanguages, ...config.targetLanguages])];
   let found = [];
   try {
-    found = await provider.search(mediaInfo, searchLanguages);
+    found = await provider.search(mediaInfo, searchLanguages, extras);
   } catch (_error) {
     found = [];
   }
-  const ranked = rankAndLimitSubtitles(found, {
+  const ranked = finalizeSubtitleResults(found, searchLanguages, config, {
     filename: extras.filename || "",
-    maxPerLanguage: config.maxSubtitlesPerLanguage
   });
 
   const directEntries = ranked.map(subtitle => ({
@@ -212,37 +213,6 @@ function parseExtras(req) {
     }
   }
   return extras;
-}
-
-function rankAndLimitSubtitles(subtitles, { filename, maxPerLanguage }) {
-  const scored = subtitles
-    .map((subtitle, index) => ({
-      subtitle,
-      index,
-      score: scoreSubtitle(subtitle, filename)
-    }))
-    .sort((a, b) => b.score - a.score || a.index - b.index);
-
-  const counts = new Map();
-  const limited = [];
-  for (const item of scored) {
-    const lang = item.subtitle.languageCode;
-    const count = counts.get(lang) || 0;
-    if (count >= maxPerLanguage) continue;
-    counts.set(lang, count + 1);
-    limited.push(item.subtitle);
-  }
-  return limited;
-}
-
-function scoreSubtitle(subtitle, filename) {
-  const haystack = `${subtitle.name || ""} ${subtitle.downloadLink || ""}`.toLowerCase();
-  const tokens = String(filename || "")
-    .toLowerCase()
-    .replace(/\.[^.]+$/, "")
-    .split(/[^a-z0-9]+/)
-    .filter(token => token.length >= 3);
-  return tokens.reduce((score, token) => score + (haystack.includes(token) ? 1 : 0), 0);
 }
 
 function setNoStore(res) {

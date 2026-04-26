@@ -35,6 +35,22 @@ const ISO1_TO_ISO3 = {
   zh: "chi"
 };
 
+const ISO3_TO_ISO1 = Object.fromEntries(Object.entries(ISO1_TO_ISO3).map(([iso1, iso3]) => [iso3, iso1]));
+Object.assign(ISO3_TO_ISO1, {
+  zho: "zh",
+  zhs: "zh",
+  zht: "zh",
+  fra: "fr",
+  deu: "de",
+  nld: "nl",
+  ces: "cs",
+  ron: "ro",
+  slk: "sk",
+  fas: "fa",
+  pob: "pt-br",
+  spn: "es"
+});
+
 const ALIASES = {
   zho: "chi",
   cmn: "chi",
@@ -125,8 +141,14 @@ function getLanguageName(code) {
   return LANGUAGE_NAMES[normalized] || normalized.toUpperCase();
 }
 
+function toISO6391(code) {
+  const normalized = normalizeLanguageCode(code);
+  return ISO3_TO_ISO1[normalized] || (/^[a-z]{2}$/.test(String(code || "").toLowerCase()) ? String(code).toLowerCase() : "");
+}
+
 module.exports = {
   getLanguageName,
   normalizeLanguageCode,
-  parseLanguageList
+  parseLanguageList,
+  toISO6391
 };

@@ -16,7 +16,7 @@ class TranslationManager {
     this.bookLocks = new Map();
   }
 
-  async requestTranslation({ sourceFileId, targetLanguage, mediaInfo, filename = "" }) {
+  async requestTranslation({ sourceFileId, targetLanguage, mediaInfo, filename = "", sourceLanguage = "" }) {
     const registryKey = mediaContextKey(mediaInfo, targetLanguage);
     const fingerprint = await catConfigFingerprint(this.config.catConfig);
     const requestKey = this._requestKey({ registryKey, sourceFileId, targetLanguage, fingerprint });
@@ -40,6 +40,7 @@ class TranslationManager {
       targetLanguage,
       mediaInfo,
       filename,
+      sourceLanguage,
       registryKey,
       fingerprint
     });
@@ -50,7 +51,7 @@ class TranslationManager {
 
   async _downloadAndRunTranslationJob(jobBase) {
     try {
-      const downloaded = await this.provider.download(jobBase.sourceFileId);
+      const downloaded = await this.provider.download(jobBase.sourceFileId, { languageHint: jobBase.sourceLanguage });
       const sourceContent = downloaded.content;
       const format = normalizeSubtitleFormat(downloaded.format || detectSubtitleFormat(sourceContent));
       const sourceHash = sha256Buffer(Buffer.from(sourceContent, "utf8"));

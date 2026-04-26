@@ -1,6 +1,6 @@
 # Context-Aware Stremio Subtitles
 
-Local Stremio subtitle addon for a personal mini-pc. It fetches subtitles from the public OpenSubtitles V3 Stremio endpoint and translates selected subtitles with `cat-cli`.
+Local Stremio subtitle addon for a personal mini-pc. It fetches subtitles from Stremio-compatible subtitle providers and translates selected subtitles with `cat-cli`.
 
 The important behavior is CAT book reuse: the first translation for a show/target language creates a CAT book with `--book-name`, stores the returned `book_id`, and later episodes/seasons use `--book-id` so the glossary/context table is shared.
 
@@ -32,6 +32,23 @@ http://<mini-pc-ip>:7001/help
 If your machine firewall blocks inbound TCP `7001`, you will need to allow that port before other devices on the LAN can reach the addon.
 
 Translation is disabled by default until `CAT_CLI_CMD` and `CAT_CONFIG` are set up. The addon still works as a LAN subtitle addon without CAT; it just will not show `Make <language>` entries yet.
+
+## Subtitle Providers
+
+`SUBTITLE_PROVIDERS` is comma-separated. Supported values:
+
+- `opensubtitles-v3`: public OpenSubtitles V3 Stremio endpoint.
+- `scs`: Stremio Community Subtitles, using the default public manifest token unless `SCS_MANIFEST_TOKEN` is set.
+- `subdl`: SubDL, requires `SUBDL_API_KEY`.
+- `subsource`: SubSource, requires `SUBSOURCE_API_KEY`.
+- `subsro`: Subs.ro, requires `SUBSRO_API_KEY`.
+- `wyzie`: Wyzie Subs, requires `WYZIE_API_KEY`.
+
+The default is `opensubtitles-v3,scs`. Provider results are searched in parallel, deduplicated, filtered, and ranked by filename/release match before Stremio sees them.
+
+The addon also accepts IMDb, TMDB, and common anime catalog IDs (`kitsu`, `mal`, `anidb`, `anilist`). TMDB IDs are resolved to IMDb through Wikidata when needed. Anime IDs can be resolved through a cached `data/anime-list-full.json`; if missing, the resolver tries to download the Fribb anime list on first use.
+
+Subtitle downloads now handle ZIP/RAR/GZIP/TAR archives, reject unsupported archive formats clearly, and decode common legacy subtitle encodings before passing text to Stremio or CAT.
 
 ## CAT CLI Setup
 
@@ -72,3 +89,7 @@ cat-cli --library-root ./data/cat-library --json run input.srt --output output.s
 ```bash
 npm test
 ```
+
+## License
+
+AGPL-3.0-only. See [LICENSE](./LICENSE).

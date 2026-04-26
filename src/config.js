@@ -28,13 +28,41 @@ function loadConfig(env = process.env) {
     sourceLanguages: parseLanguageList(env.SOURCE_LANGUAGES || "eng", ["eng"]),
     targetLanguages: parseLanguageList(env.TARGET_LANGUAGES || "chi", ["chi"]),
     maxSubtitlesPerLanguage: Number.parseInt(env.MAX_SUBTITLES_PER_LANGUAGE || "5", 10),
-    providerTimeoutMs: Number.parseInt(env.PROVIDER_TIMEOUT_MS || "12000", 10)
+    providerTimeoutMs: Number.parseInt(env.PROVIDER_TIMEOUT_MS || "12000", 10),
+    idResolverTimeoutMs: Number.parseInt(env.ID_RESOLVER_TIMEOUT_MS || "8000", 10),
+    subtitleProviders: parseProviderList(env.SUBTITLE_PROVIDERS || "opensubtitles-v3,scs"),
+    excludeHearingImpairedSubtitles: parseBooleanEnv(env.EXCLUDE_HEARING_IMPAIRED_SUBTITLES, false),
+    deduplicateSubtitles: parseBooleanEnv(env.DEDUPLICATE_SUBTITLES, true),
+    subdlApiKey: env.SUBDL_API_KEY || "",
+    subsourceApiKey: env.SUBSOURCE_API_KEY || "",
+    subsRoApiKey: env.SUBSRO_API_KEY || "",
+    wyzieApiKey: env.WYZIE_API_KEY || "",
+    scsManifestToken: env.SCS_MANIFEST_TOKEN || ""
   };
 }
 
 function parseBooleanEnv(value, defaultValue) {
   if (value === undefined || value === null || value === "") return defaultValue;
   return /^(1|true|yes|on)$/i.test(String(value));
+}
+
+function parseProviderList(value) {
+  const aliases = {
+    opensubtitles: "opensubtitles-v3",
+    opensubtitlesv3: "opensubtitles-v3",
+    "opensubtitles_v3": "opensubtitles-v3",
+    stremiocommunitysubtitles: "scs",
+    community: "scs",
+    "subs.ro": "subsro",
+    wyziesubs: "wyzie"
+  };
+  const allowed = new Set(["opensubtitles-v3", "scs", "subdl", "subsource", "subsro", "wyzie"]);
+  const providers = String(value || "")
+    .split(",")
+    .map(item => item.trim().toLowerCase())
+    .map(item => aliases[item] || item)
+    .filter(item => allowed.has(item));
+  return [...new Set(providers.length ? providers : ["opensubtitles-v3"])];
 }
 
 function resolveBaseUrl(req, configuredBaseUrl) {
@@ -89,5 +117,6 @@ module.exports = {
   isPrivateIPv4,
   lanIPv4Addresses,
   loadConfig,
+  parseProviderList,
   resolveBaseUrl
 };

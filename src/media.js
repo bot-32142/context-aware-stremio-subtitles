@@ -2,12 +2,49 @@ const path = require("node:path");
 
 function parseStremioId(type, id) {
   const rawId = String(id || "").trim();
-  const match = rawId.match(/^(tt\d+)(?::(\d+):(\d+))?$/i);
-  if (!match) return null;
+  const parts = rawId.split(":");
+  const first = String(parts[0] || "").toLowerCase();
+  let rootId = "";
+  let imdbId = "";
+  let tmdbId = "";
+  let animeId = "";
+  let animeIdType = "";
+  let animeNumericId = "";
+  let season = null;
+  let episode = null;
 
-  const rootId = match[1].toLowerCase();
-  const season = match[2] ? Number.parseInt(match[2], 10) : null;
-  const episode = match[3] ? Number.parseInt(match[3], 10) : null;
+  if (/^tt\d+$/i.test(first)) {
+    rootId = first;
+    imdbId = first;
+    season = parts[1] ? Number.parseInt(parts[1], 10) : null;
+    episode = parts[2] ? Number.parseInt(parts[2], 10) : null;
+  } else if (first === "tmdb" && /^\d+$/.test(parts[1] || "")) {
+    tmdbId = parts[1];
+    rootId = `tmdb:${tmdbId}`;
+    if (parts.length >= 4) {
+      season = Number.parseInt(parts[2], 10);
+      episode = Number.parseInt(parts[3], 10);
+    } else if (parts.length === 3 && normalizeStremioType(type, null, Number.parseInt(parts[2], 10)) !== "movie") {
+      season = 1;
+      episode = Number.parseInt(parts[2], 10);
+    }
+  } else if (isAnimePrefix(first) && /^\d+$/.test(parts[1] || "")) {
+    animeIdType = first === "myanimelist" ? "mal" : first;
+    animeNumericId = parts[1];
+    animeId = `${animeIdType}:${animeNumericId}`;
+    rootId = animeId;
+    if (parts.length >= 4) {
+      season = Number.parseInt(parts[2], 10);
+      episode = Number.parseInt(parts[3], 10);
+    } else if (parts.length === 3) {
+      season = 1;
+      episode = Number.parseInt(parts[2], 10);
+    }
+  } else {
+    return null;
+  }
+
+  if ((season !== null && Number.isNaN(season)) || (episode !== null && Number.isNaN(episode))) return null;
   const normalizedType = normalizeStremioType(type, season, episode);
 
   return {
@@ -15,7 +52,11 @@ function parseStremioId(type, id) {
     stremioType: String(type || "").trim().toLowerCase(),
     rawId,
     rootId,
-    imdbId: rootId,
+    imdbId,
+    tmdbId,
+    animeId,
+    animeIdType,
+    animeNumericId,
     season,
     episode,
     isEpisode: season !== null && episode !== null
@@ -27,6 +68,10 @@ function normalizeStremioType(type, season, episode) {
   if (rawType === "anime") return "anime";
   if (rawType === "series" || season !== null || episode !== null) return "series";
   return "movie";
+}
+
+function isAnimePrefix(value) {
+  return ["anidb", "kitsu", "mal", "myanimelist", "anilist", "tvdb"].includes(String(value || "").toLowerCase());
 }
 
 function mediaContextKey(mediaInfo, targetLanguage) {
