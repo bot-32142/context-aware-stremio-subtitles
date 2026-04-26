@@ -15,13 +15,49 @@ test("manifest route returns a Stremio subtitle addon manifest", async () => {
 
     assert.equal(manifest.resources.includes("subtitles"), true);
     assert.equal(manifest.types.includes("series"), true);
+    assert.match(manifest.description, /Translation is disabled/);
+  } finally {
+    await close();
+  }
+});
+
+test("root route redirects to the manifest for Stremio compatibility", async () => {
+  const { baseUrl, close } = await serveTestApp();
+  try {
+    const response = await fetch(`${baseUrl}/`, { redirect: "manual" });
+
+    assert.equal(response.status, 302);
+    assert.equal(response.headers.get("location"), "/manifest.json");
+  } finally {
+    await close();
+  }
+});
+
+test("help route prints the manifest URL for quick install", async () => {
+  const { baseUrl, close } = await serveTestApp();
+  try {
+    const response = await fetch(`${baseUrl}/help`);
+    const body = await response.text();
+
+    assert.match(body, /Manifest: http:\/\/127\.0\.0\.1:\d+\/manifest\.json/);
+  } finally {
+    await close();
+  }
+});
+
+test("manifest route includes permissive CORS headers", async () => {
+  const { baseUrl, close } = await serveTestApp();
+  try {
+    const response = await fetch(`${baseUrl}/manifest.json`);
+
+    assert.equal(response.headers.get("access-control-allow-origin"), "*");
   } finally {
     await close();
   }
 });
 
 test("subtitle route includes direct subtitles and Make entries", async () => {
-  const { baseUrl, close } = await serveTestApp();
+  const { baseUrl, close } = await serveTestApp({ env: { ENABLE_TRANSLATION: "true" } });
   try {
     const response = await fetch(`${baseUrl}/subtitles/series/tt0944947:1:1.json?filename=show.s01e01.mkv`);
     const payload = await response.json();
@@ -30,6 +66,18 @@ test("subtitle route includes direct subtitles and Make entries", async () => {
     assert.equal(labels.includes("eng"), true);
     assert.equal(labels.includes("Make Chinese"), true);
     assert.equal(payload.subtitles.some(item => item.url.includes("/translate/source1/chi")), true);
+  } finally {
+    await close();
+  }
+});
+
+test("subtitle route omits Make entries when translation is disabled", async () => {
+  const { baseUrl, close } = await serveTestApp();
+  try {
+    const response = await fetch(`${baseUrl}/subtitles/series/tt0944947:1:1.json?filename=show.s01e01.mkv`);
+    const payload = await response.json();
+
+    assert.equal(payload.subtitles.some(item => item.lang.startsWith("Make ")), false);
   } finally {
     await close();
   }
@@ -63,7 +111,7 @@ test("download route serves provider subtitle content", async () => {
 
 test("translate route returns loading then final cached subtitle", async () => {
   const manager = new StubTranslationManager();
-  const { baseUrl, close } = await serveTestApp({ translationManager: manager });
+  const { baseUrl, close } = await serveTestApp({ translationManager: manager, env: { ENABLE_TRANSLATION: "true" } });
   try {
     const url = `${baseUrl}/translate/source1/chi?type=series&id=tt0944947:1:1&filename=show.s01e01.mkv`;
     const first = await fetch(url);
@@ -78,12 +126,26 @@ test("translate route returns loading then final cached subtitle", async () => {
   }
 });
 
+test("translate route rejects requests when translation is disabled", async () => {
+  const { baseUrl, close } = await serveTestApp();
+  try {
+    const response = await fetch(`${baseUrl}/translate/source1/chi?type=series&id=tt0944947:1:1`);
+    const body = await response.text();
+
+    assert.equal(response.status, 503);
+    assert.match(body, /Translation is disabled/);
+  } finally {
+    await close();
+  }
+});
+
 async function serveTestApp(overrides = {}) {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "cat-routes-"));
   const config = loadConfig({
     DATA_DIR: tmp,
     SOURCE_LANGUAGES: "eng",
-    TARGET_LANGUAGES: "chi"
+    TARGET_LANGUAGES: "chi",
+    ...overrides.env
   });
   const app = createApp({
     config,

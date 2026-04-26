@@ -13,6 +13,17 @@ function createApp({ config, provider, registry, catCli, translationManager } = 
   if (!config) throw new Error("createApp requires config.");
   const app = express();
   app.disable("x-powered-by");
+  app.use((req, res, next) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET,HEAD,OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "*");
+    res.setHeader("Access-Control-Expose-Headers", "Content-Type, Content-Disposition, Cache-Control");
+    if (req.method === "OPTIONS") {
+      res.sendStatus(204);
+      return;
+    }
+    next();
+  });
 
   const resolvedProvider = provider || new OpenSubtitlesV3Provider({ timeoutMs: config.providerTimeoutMs });
   const resolvedRegistry = registry || new BookRegistry(path.join(config.dataDir, "book-registry.json"));
@@ -34,6 +45,23 @@ function createApp({ config, provider, registry, catCli, translationManager } = 
 
   app.get("/healthz", (_req, res) => {
     res.json({ ok: true });
+  });
+
+  app.get("/", (_req, res) => {
+    res.redirect(302, "/manifest.json");
+  });
+
+  app.get("/help", (req, res) => {
+    const baseUrl = resolveBaseUrl(req, config.baseUrl);
+    res.type("text/plain").send([
+      config.addonName,
+      "",
+      `Manifest: ${baseUrl}/manifest.json`,
+      `Health: ${baseUrl}/healthz`,
+      `Translation: ${config.translationEnabled ? "enabled" : "disabled until CAT is configured"}`,
+      "",
+      "Install the manifest URL in Stremio to use this addon."
+    ].join("\n"));
   });
 
   app.get("/logo.png", (_req, res) => {
@@ -67,6 +95,10 @@ function createApp({ config, provider, registry, catCli, translationManager } = 
   });
 
   app.get("/translate/:sourceFileId/:targetLang", async (req, res) => {
+    if (!config.translationEnabled) {
+      res.status(503).type("text/plain").send("Translation is disabled. Set ENABLE_TRANSLATION=true and configure CAT_CLI_CMD/CAT_CONFIG.");
+      return;
+    }
     try {
       const mediaInfo = parseStremioId(req.query.type || "movie", req.query.id || "");
       if (!mediaInfo) {
@@ -128,20 +160,22 @@ async function handleSubtitles(req, res, { config, provider }) {
 
   const sourceLangs = new Set(config.sourceLanguages.map(normalizeLanguageCode));
   const translationEntries = [];
-  const sourceSubtitles = ranked.filter(subtitle => sourceLangs.has(subtitle.languageCode));
-  for (const targetLanguage of config.targetLanguages) {
-    const targetName = getLanguageName(targetLanguage);
-    for (const subtitle of sourceSubtitles) {
-      const url = new URL(`${baseUrl}/translate/${encodeURIComponent(subtitle.fileId)}/${encodeURIComponent(targetLanguage)}`);
-      url.searchParams.set("type", req.params.type);
-      url.searchParams.set("id", req.params.id);
-      if (extras.filename) url.searchParams.set("filename", extras.filename);
-      url.searchParams.set("sourceLang", subtitle.languageCode);
-      translationEntries.push({
-        id: `translate_${subtitle.fileId}_to_${targetLanguage}`,
-        lang: `Make ${targetName}`,
-        url: url.toString()
-      });
+  if (config.translationEnabled) {
+    const sourceSubtitles = ranked.filter(subtitle => sourceLangs.has(subtitle.languageCode));
+    for (const targetLanguage of config.targetLanguages) {
+      const targetName = getLanguageName(targetLanguage);
+      for (const subtitle of sourceSubtitles) {
+        const url = new URL(`${baseUrl}/translate/${encodeURIComponent(subtitle.fileId)}/${encodeURIComponent(targetLanguage)}`);
+        url.searchParams.set("type", req.params.type);
+        url.searchParams.set("id", req.params.id);
+        if (extras.filename) url.searchParams.set("filename", extras.filename);
+        url.searchParams.set("sourceLang", subtitle.languageCode);
+        translationEntries.push({
+          id: `translate_${subtitle.fileId}_to_${targetLanguage}`,
+          lang: `Make ${targetName}`,
+          url: url.toString()
+        });
+      }
     }
   }
 
@@ -149,11 +183,14 @@ async function handleSubtitles(req, res, { config, provider }) {
 }
 
 function buildManifest(config, baseUrl) {
+  const modeDescription = config.translationEnabled
+    ? `Fetch subtitles and translate them locally with cat-cli. Sources: ${config.sourceLanguages.join(", ")}. Targets: ${config.targetLanguages.join(", ")}.`
+    : `Fetch subtitles from OpenSubtitles on your local network. Translation is disabled until CAT is configured.`;
   return {
     id: config.addonId,
     version: "0.1.0",
     name: config.addonName,
-    description: `Fetch subtitles and translate them locally with cat-cli. Sources: ${config.sourceLanguages.join(", ")}. Targets: ${config.targetLanguages.join(", ")}.`,
+    description: modeDescription,
     resources: ["subtitles"],
     types: ["movie", "series", "anime"],
     catalogs: [],

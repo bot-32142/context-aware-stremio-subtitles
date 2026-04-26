@@ -12,13 +12,30 @@ cp .env.example .env
 npm start
 ```
 
-Install in Stremio from:
+On startup the server prints the manifest URL you can paste into Stremio.
+
+The addon root also redirects to the manifest, so both of these work:
 
 ```text
+http://<mini-pc-ip>:7001/
 http://<mini-pc-ip>:7001/manifest.json
 ```
 
+For a human-readable status page, open:
+
+```text
+http://<mini-pc-ip>:7001/help
+```
+
+`HOST=0.0.0.0` is the default so the addon listens on your LAN, not only on localhost.
+
+If your machine firewall blocks inbound TCP `7001`, you will need to allow that port before other devices on the LAN can reach the addon.
+
+Translation is disabled by default until `CAT_CLI_CMD` and `CAT_CONFIG` are set up. The addon still works as a LAN subtitle addon without CAT; it just will not show `Make <language>` entries yet.
+
 ## CAT CLI Setup
+
+Set `ENABLE_TRANSLATION=true` only after `CAT_CLI_CMD` points to a working CLI and `CAT_CONFIG` points to a valid CAT config file.
 
 `CAT_CLI_CMD` should point to the CLI added in `~/workspace2/context-aware-translation`.
 
