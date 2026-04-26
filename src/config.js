@@ -24,6 +24,7 @@ function loadConfig(env = process.env) {
     catLibraryRoot: path.resolve(expandHome(env.CAT_LIBRARY_ROOT || path.join(dataDir, "cat-library"))),
     catConfig,
     catCliCommand: env.CAT_CLI_CMD || "cat-cli",
+    catNoPolish: parseBooleanEnv(env.CAT_NO_POLISH, false),
     translationEnabled: parseBooleanEnv(env.ENABLE_TRANSLATION, Boolean(catConfig)),
     sourceLanguages: parseLanguageList(env.SOURCE_LANGUAGES || "eng", ["eng"]),
     targetLanguages: parseLanguageList(env.TARGET_LANGUAGES || "chi", ["chi"]),

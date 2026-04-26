@@ -51,7 +51,9 @@ function buildCatCliArgs(options) {
   const args = [];
   if (options.libraryRoot) args.push("--library-root", options.libraryRoot);
   if (options.configPath && !options.bookId) args.push("--config", options.configPath);
-  args.push("--json", "run", options.inputPath, "--output", options.outputPath);
+  args.push("--json", "run");
+  if (options.noPolish) args.push("--no-polish");
+  args.push(options.inputPath, "--output", options.outputPath);
   if (options.bookId) {
     args.push("--book-id", options.bookId);
   } else if (options.bookName) {
@@ -74,26 +76,47 @@ async function catConfigFingerprint(configPath) {
 }
 
 class CatCli {
-  constructor({ command, libraryRoot, configPath, timeoutMs = 60 * 60 * 1000 }) {
+  constructor({ command, libraryRoot, configPath, noPolish = false, timeoutMs = 60 * 60 * 1000 }) {
     const [bin, ...baseArgs] = splitCommand(command || "cat-cli");
     this.bin = bin;
     this.baseArgs = baseArgs;
     this.libraryRoot = libraryRoot;
     this.configPath = configPath;
+    this.noPolish = noPolish;
     this.timeoutMs = timeoutMs;
   }
 
   async run(options) {
-    const args = [
+    return this._executeJson([
       ...this.baseArgs,
       ...buildCatCliArgs({
         ...options,
         libraryRoot: this.libraryRoot,
-        configPath: this.configPath
+        configPath: this.configPath,
+        noPolish: options.noPolish ?? this.noPolish
       })
-    ];
+    ]);
+  }
 
-    const { stdout, stderr } = await spawnCollect(this.bin, args, this.timeoutMs);
+  async listBooks() {
+    const data = await this._executeJson([...this.baseArgs, ...(this.libraryRoot ? ["--library-root", this.libraryRoot] : []), "--json", "books", "list"]);
+    return Array.isArray(data.items) ? data.items : [];
+  }
+
+  async _executeJson(args) {
+    let stdout = "";
+    let stderr = "";
+    let exitCode = 0;
+
+    try {
+      ({ stdout, stderr } = await spawnCollect(this.bin, args, this.timeoutMs));
+    } catch (error) {
+      stdout = error.stdout || "";
+      stderr = error.stderr || "";
+      exitCode = error.exitCode || 1;
+      if (!stdout.trim()) throw error;
+    }
+
     let payload;
     try {
       payload = JSON.parse(stdout);
@@ -101,11 +124,28 @@ class CatCli {
       throw new Error(`cat-cli returned non-JSON output: ${stdout.slice(0, 500)} ${stderr.slice(0, 500)}`.trim());
     }
     if (!payload.ok) {
-      const message = payload.error?.message || "cat-cli failed.";
-      throw new Error(message);
+      throw buildCatCliError(payload, { exitCode, stderr, stdout });
     }
     return payload.data || {};
   }
+}
+
+function buildCatCliError(payload, { exitCode, stderr, stdout }) {
+  const details = payload?.error?.details && typeof payload.error.details === "object" ? payload.error.details : {};
+  const message = payload?.error?.message || `cat-cli exited with ${exitCode}: ${stderr || stdout}`.trim() || "cat-cli failed.";
+  const error = new Error(message);
+  error.details = details;
+  error.exitCode = exitCode;
+  error.stdout = stdout;
+  error.stderr = stderr;
+
+  const bookId = details.book_id || details.project_id || payload?.data?.book_id || payload?.data?.project_id || "";
+  if (bookId) error.bookId = String(bookId);
+
+  const projectId = details.project_id || details.book_id || payload?.data?.project_id || payload?.data?.book_id || "";
+  if (projectId) error.projectId = String(projectId);
+
+  return error;
 }
 
 function spawnCollect(bin, args, timeoutMs) {
@@ -144,7 +184,11 @@ function spawnCollect(bin, args, timeoutMs) {
       settled = true;
       clearTimeout(timer);
       if (code !== 0) {
-        reject(new Error(`cat-cli exited with ${code}: ${stderr || stdout}`.trim()));
+        const error = new Error(`cat-cli exited with ${code}: ${stderr || stdout}`.trim());
+        error.exitCode = code;
+        error.stdout = stdout;
+        error.stderr = stderr;
+        reject(error);
         return;
       }
       resolve({ stdout, stderr });

@@ -84,11 +84,25 @@ test("cat-cli args use config only when creating a new book", () => {
   assert.equal(reuseArgs.includes("--config"), false);
 });
 
+test("cat-cli args can disable polish for subtitle jobs", () => {
+  const args = buildCatCliArgs({
+    libraryRoot: "/library",
+    configPath: "/cat.yaml",
+    inputPath: "/in.srt",
+    outputPath: "/out.srt",
+    bookName: "Series tt1 -> chi",
+    format: "srt",
+    noPolish: true
+  });
+
+  assert.deepEqual(args.slice(4, 7), ["--json", "run", "--no-polish"]);
+});
+
 test("CAT_CLI_CMD splitting supports quoted args", () => {
-  assert.deepEqual(splitCommand('uv --directory "/home/me/context aware" run cat-cli'), [
+  assert.deepEqual(splitCommand('uv --directory "checkout/context aware" run cat-cli'), [
     "uv",
     "--directory",
-    "/home/me/context aware",
+    "checkout/context aware",
     "run",
     "cat-cli"
   ]);

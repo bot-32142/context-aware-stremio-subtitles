@@ -33,7 +33,8 @@ function createApp({ config, provider, registry, catCli, translationManager } = 
     new CatCli({
       command: config.catCliCommand,
       libraryRoot: config.catLibraryRoot,
-      configPath: config.catConfig
+      configPath: config.catConfig,
+      noPolish: config.catNoPolish
     });
   const translator =
     translationManager ||

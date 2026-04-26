@@ -101,29 +101,18 @@ class TranslationManager {
     try {
       await this._withBookLock(job.registryKey, async () => {
         const registryEntry = await this._resolveRegistryEntry(job);
-        const data = await this.catCli.run({
-          inputPath,
-          outputPath,
-          format: job.format,
-          bookId: registryEntry?.bookId || "",
-          bookName: registryEntry ? "" : mediaBookName(job.mediaInfo, job.targetLanguage, job.filename)
-        });
-
-        if (!registryEntry) {
-          const bookId = data.book_id || data.project_id;
-          if (!bookId) throw new Error("cat-cli did not return data.book_id for the new book.");
-          await this.registry.set(job.registryKey, {
-            bookId,
-            bookName: mediaBookName(job.mediaInfo, job.targetLanguage, job.filename),
-            targetLanguage: job.targetLanguage,
-            mediaRootId: job.mediaInfo.rootId,
-            mediaType: job.mediaInfo.type,
-            catConfigFingerprint: job.fingerprint,
-            createdAt: new Date().toISOString(),
-            lastUsedAt: new Date().toISOString()
+        try {
+          const data = await this.catCli.run({
+            inputPath,
+            outputPath,
+            format: job.format,
+            bookId: registryEntry?.bookId || "",
+            bookName: registryEntry ? "" : mediaBookName(job.mediaInfo, job.targetLanguage, job.filename)
           });
-        } else {
-          await this.registry.touch(job.registryKey);
+          await this._rememberBook(job, registryEntry, data.book_id || data.project_id || "");
+        } catch (error) {
+          await this._rememberBook(job, registryEntry, error.bookId || error.projectId || error.details?.book_id || error.details?.project_id || "");
+          throw error;
         }
       });
 
@@ -143,12 +132,52 @@ class TranslationManager {
 
   async _resolveRegistryEntry(job) {
     const existing = await this.registry.get(job.registryKey);
-    if (!existing) return null;
-    if (existing.catConfigFingerprint && existing.catConfigFingerprint !== job.fingerprint) {
+    if (isReusableRegistryEntry(existing, job.fingerprint)) return existing;
+
+    const recovered = await this._recoverBookFromCatLibrary(job);
+    if (isReusableRegistryEntry(recovered, job.fingerprint)) return recovered;
+    return null;
+  }
+
+  async _recoverBookFromCatLibrary(job) {
+    if (typeof this.catCli.listBooks !== "function") return null;
+
+    try {
+      const books = await this.catCli.listBooks();
+      const candidate = selectReusableBook(books, job.mediaInfo, job.targetLanguage);
+      if (!candidate?.bookId) return null;
+      return await this.registry.set(job.registryKey, {
+        bookId: candidate.bookId,
+        bookName: candidate.bookName,
+        targetLanguage: job.targetLanguage,
+        mediaRootId: job.mediaInfo.rootId,
+        mediaType: job.mediaInfo.type,
+        catConfigFingerprint: job.fingerprint,
+        createdAt: new Date().toISOString(),
+        lastUsedAt: new Date().toISOString()
+      });
+    } catch (_error) {
       return null;
     }
-    if (!existing.bookId) return null;
-    return existing;
+  }
+
+  async _rememberBook(job, existingEntry, bookId) {
+    if (existingEntry) {
+      await this.registry.touch(job.registryKey);
+      return existingEntry;
+    }
+
+    if (!bookId) return null;
+    return this.registry.set(job.registryKey, {
+      bookId,
+      bookName: mediaBookName(job.mediaInfo, job.targetLanguage, job.filename),
+      targetLanguage: job.targetLanguage,
+      mediaRootId: job.mediaInfo.rootId,
+      mediaType: job.mediaInfo.type,
+      catConfigFingerprint: job.fingerprint,
+      createdAt: new Date().toISOString(),
+      lastUsedAt: new Date().toISOString()
+    });
   }
 
   async _withBookLock(key, fn) {
@@ -245,3 +274,58 @@ async function readTextIfExists(filePath) {
 module.exports = {
   TranslationManager
 };
+
+function isReusableRegistryEntry(entry, fingerprint) {
+  if (!entry?.bookId) return false;
+  if (entry.catConfigFingerprint && entry.catConfigFingerprint !== fingerprint) return false;
+  return true;
+}
+
+function selectReusableBook(books, mediaInfo, targetLanguage) {
+  const expectedBookName = mediaBookName(mediaInfo, targetLanguage, "");
+  const matches = books
+    .map(item => toReusableBookCandidate(item, expectedBookName))
+    .filter(candidate => matchesMediaContext(candidate, mediaInfo, targetLanguage, expectedBookName))
+    .sort(compareReusableBooks);
+  return matches[0] || null;
+}
+
+function toReusableBookCandidate(item, expectedBookName) {
+  const bookId = String(item?.project?.project_id || "");
+  const bookName = String(item?.project?.name || "");
+  const progress = parseProgressSummary(item?.progress_summary);
+  return {
+    bookId,
+    bookName,
+    exactNameMatch: bookName === expectedBookName,
+    translatedChunks: progress.translatedChunks,
+    totalChunks: progress.totalChunks,
+    modifiedAt: Number(item?.modified_at || 0)
+  };
+}
+
+function matchesMediaContext(candidate, mediaInfo, targetLanguage, expectedBookName) {
+  if (!candidate.bookId || !candidate.bookName) return false;
+  const suffix = ` -> ${targetLanguage}`;
+  const prefix = expectedBookName.endsWith(suffix) ? expectedBookName.slice(0, -suffix.length) : expectedBookName;
+  return candidate.bookName === expectedBookName || (candidate.bookName.startsWith(`${prefix} (`) && candidate.bookName.endsWith(suffix));
+}
+
+function parseProgressSummary(value) {
+  const match = /^(\d+)\s*\/\s*(\d+)\s+translated$/i.exec(String(value || "").trim());
+  if (!match) return { translatedChunks: 0, totalChunks: 0 };
+  return {
+    translatedChunks: Number.parseInt(match[1], 10),
+    totalChunks: Number.parseInt(match[2], 10)
+  };
+}
+
+function compareReusableBooks(left, right) {
+  return (
+    Number(right.exactNameMatch) - Number(left.exactNameMatch) ||
+    right.translatedChunks - left.translatedChunks ||
+    right.totalChunks - left.totalChunks ||
+    right.modifiedAt - left.modifiedAt ||
+    left.bookId.localeCompare(right.bookId)
+  );
+}

@@ -54,25 +54,28 @@ Subtitle downloads now handle ZIP/RAR/GZIP/TAR archives, reject unsupported arch
 
 Set `ENABLE_TRANSLATION=true` only after `CAT_CLI_CMD` points to a working CLI and `CAT_CONFIG` points to a valid CAT config file.
 
-`CAT_CLI_CMD` should point to the CLI added in `~/workspace2/context-aware-translation`.
+`CAT_CLI_CMD` should point to a working `cat-cli` checkout or installation.
+
+Set `CAT_NO_POLISH=true` if you want the addon to invoke `cat-cli run --no-polish ...` for subtitle jobs.
 
 For a source checkout:
 
 ```bash
-CAT_CLI_CMD="uv --directory /home/mini/context-aware-translation run cat-cli"
-CAT_CONFIG=/home/mini/context-aware-translation/cat.yaml
+CAT_CLI_CMD="uv --directory <path-to-context-aware-translation> run cat-cli"
+CAT_NO_POLISH=true
+CAT_CONFIG=<path-to-cat-config>
 ```
 
 For first use of a show/target language, the addon runs:
 
 ```bash
-cat-cli --library-root ./data/cat-library --config /path/cat.yaml --json run input.srt --output output.srt --book-name "Series tt0944947 -> chi" --type subtitle --format srt
+cat-cli --library-root ./data/cat-library --config /path/cat.yaml --json run --no-polish input.srt --output output.srt --book-name "Series tt0944947 -> chi" --type subtitle --format srt
 ```
 
 After `cat-cli` returns `data.book_id`, later episodes use:
 
 ```bash
-cat-cli --library-root ./data/cat-library --json run input.srt --output output.srt --book-id <stored-book-id> --type subtitle --format srt
+cat-cli --library-root ./data/cat-library --json run --no-polish input.srt --output output.srt --book-id <stored-book-id> --type subtitle --format srt
 ```
 
 `--config` is intentionally omitted with `--book-id`, because the existing CAT book already owns its config.
