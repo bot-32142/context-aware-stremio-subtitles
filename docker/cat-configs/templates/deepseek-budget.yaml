@@ -1,0 +1,98 @@
+# Built-in CAT config template for Docker translation.
+# Rendered at container startup with target_language from TARGET_LANGUAGE.
+version: 1
+default_workflow_profile: budget_deepseek
+
+connections:
+  deepseek_flash:
+    display_name: DeepSeek V4 Flash
+    provider: deepseek
+    api_key_env: DEEPSEEK_API_KEY
+    base_url: https://api.deepseek.com
+    default_model: deepseek-v4-flash
+    temperature: 0
+    timeout: 180
+    max_retries: 3
+    concurrency: 15
+
+  deepseek_pro:
+    display_name: DeepSeek V4 Pro
+    provider: deepseek
+    api_key_env: DEEPSEEK_API_KEY
+    base_url: https://api.deepseek.com
+    default_model: deepseek-v4-pro
+    temperature: 0
+    timeout: 300
+    max_retries: 3
+    concurrency: 15
+
+workflow_profiles:
+  budget_deepseek:
+    profile_id: budget_deepseek
+    name: Budget DeepSeek
+    kind: shared
+    target_language: __CAT_TARGET_LANGUAGE__
+    routes:
+      - step_id: extractor
+        step_label: Extractor
+        connection_id: deepseek_flash
+        model: deepseek-v4-flash
+        step_config:
+          max_gleaning: 1
+          kwargs:
+            extra_body:
+              thinking:
+                type: enabled
+
+      - step_id: summarizer
+        step_label: Summarizer
+        connection_id: deepseek_flash
+        model: deepseek-v4-flash
+        step_config:
+          kwargs:
+            extra_body:
+              thinking:
+                type: enabled
+
+      - step_id: glossary_translator
+        step_label: Glossary translator
+        connection_id: deepseek_flash
+        model: deepseek-v4-flash
+        step_config:
+          kwargs:
+            extra_body:
+              thinking:
+                type: enabled
+
+      - step_id: translator
+        step_label: Translator
+        connection_id: deepseek_flash
+        model: deepseek-v4-flash
+        step_config:
+          chunk_size: 1000
+          max_tokens_per_llm_call: 3500
+          strip_epub_ruby: true
+          kwargs:
+            extra_body:
+              thinking:
+                type: enabled
+
+      - step_id: polish
+        step_label: Polish
+        connection_id: deepseek_flash
+        model: deepseek-v4-flash
+        step_config:
+          kwargs:
+            extra_body:
+              thinking:
+                type: enabled
+
+      - step_id: reviewer
+        step_label: Reviewer
+        connection_id: deepseek_pro
+        model: deepseek-v4-pro
+        step_config:
+          kwargs:
+            extra_body:
+              thinking:
+                type: enabled

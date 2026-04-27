@@ -1,0 +1,7 @@
+services:
+  addon:
+    env_file:
+      - ./docker/profiles/all-providers.env
+      - ${CAT_PROFILE_FILE:-./docker/profiles/translation-deepseek-budget.env}
+    volumes:
+      - ${ADDON_DATA_DIR:-./data}:/data

@@ -71,6 +71,47 @@ test("subtitle route includes direct subtitles and Make entries", async () => {
   }
 });
 
+test("subtitle route labels Make entries from configured target language", async () => {
+  const { baseUrl, close } = await serveTestApp({ env: { ENABLE_TRANSLATION: "true", TARGET_LANGUAGE: "Spanish" } });
+  try {
+    const response = await fetch(`${baseUrl}/subtitles/series/tt0944947:1:1.json?filename=show.s01e01.mkv`);
+    const payload = await response.json();
+
+    assert.equal(payload.subtitles.some(item => item.lang === "Make Spanish"), true);
+    assert.equal(payload.subtitles.some(item => item.url.includes("/translate/source1/spa")), true);
+  } finally {
+    await close();
+  }
+});
+
+test("subtitle route accepts English as a single target language", async () => {
+  const { baseUrl, close } = await serveTestApp({ env: { ENABLE_TRANSLATION: "true", TARGET_LANGUAGE: "English" } });
+  try {
+    const response = await fetch(`${baseUrl}/subtitles/series/tt0944947:1:1.json?filename=show.s01e01.mkv`);
+    const payload = await response.json();
+
+    assert.equal(payload.subtitles.some(item => item.lang === "Make English"), true);
+    assert.equal(payload.subtitles.some(item => item.url.includes("/translate/source1/eng")), true);
+  } finally {
+    await close();
+  }
+});
+
+test("subtitle route preserves target language display variants", async () => {
+  const { baseUrl, close } = await serveTestApp({
+    env: { ENABLE_TRANSLATION: "true", TARGET_LANGUAGE: "Traditional Chinese" }
+  });
+  try {
+    const response = await fetch(`${baseUrl}/subtitles/series/tt0944947:1:1.json?filename=show.s01e01.mkv`);
+    const payload = await response.json();
+
+    assert.equal(payload.subtitles.some(item => item.lang === "Make Traditional Chinese"), true);
+    assert.equal(payload.subtitles.some(item => item.url.includes("/translate/source1/chi")), true);
+  } finally {
+    await close();
+  }
+});
+
 test("subtitle route omits Make entries when translation is disabled", async () => {
   const { baseUrl, close } = await serveTestApp();
   try {

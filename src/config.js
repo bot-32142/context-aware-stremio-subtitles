@@ -1,6 +1,6 @@
 const os = require("node:os");
 const path = require("node:path");
-const { parseLanguageList } = require("./languages");
+const { getLanguageLabel, normalizeLanguageCode, parseLanguageList } = require("./languages");
 
 function expandHome(value) {
   const text = String(value || "");
@@ -12,6 +12,8 @@ function expandHome(value) {
 function loadConfig(env = process.env) {
   const dataDir = path.resolve(expandHome(env.DATA_DIR || path.join(process.cwd(), "data")));
   const catConfig = env.CAT_CONFIG ? path.resolve(expandHome(env.CAT_CONFIG)) : "";
+  const targetLanguageInput = env.TARGET_LANGUAGE || env.TARGET_LANGUAGES || "chi";
+  const targetLanguages = parseLanguageList(targetLanguageInput, ["chi"]);
   return {
     addonId: env.ADDON_ID || "local.context-aware-stremio-subtitles",
     addonName: env.ADDON_NAME || "Context-Aware Stremio Subtitles",
@@ -27,7 +29,8 @@ function loadConfig(env = process.env) {
     catNoPolish: parseBooleanEnv(env.CAT_NO_POLISH, false),
     translationEnabled: parseBooleanEnv(env.ENABLE_TRANSLATION, Boolean(catConfig)),
     sourceLanguages: parseLanguageList(env.SOURCE_LANGUAGES || "eng", ["eng"]),
-    targetLanguages: parseLanguageList(env.TARGET_LANGUAGES || "chi", ["chi"]),
+    targetLanguages,
+    targetLanguageNames: targetLanguageNames(targetLanguageInput, targetLanguages),
     maxSubtitlesPerLanguage: Number.parseInt(env.MAX_SUBTITLES_PER_LANGUAGE || "5", 10),
     providerTimeoutMs: Number.parseInt(env.PROVIDER_TIMEOUT_MS || "12000", 10),
     idResolverTimeoutMs: Number.parseInt(env.ID_RESOLVER_TIMEOUT_MS || "8000", 10),
@@ -40,6 +43,22 @@ function loadConfig(env = process.env) {
     wyzieApiKey: env.WYZIE_API_KEY || "",
     scsManifestToken: env.SCS_MANIFEST_TOKEN || ""
   };
+}
+
+function targetLanguageNames(value, targetLanguages) {
+  const labels = {};
+  const items = String(value || "")
+    .split(",")
+    .map(item => item.trim())
+    .filter(Boolean);
+  for (const item of items) {
+    const code = normalizeLanguageCode(item);
+    if (code && targetLanguages.includes(code) && !labels[code]) labels[code] = getLanguageLabel(item);
+  }
+  for (const code of targetLanguages) {
+    if (!labels[code]) labels[code] = getLanguageLabel(code);
+  }
+  return labels;
 }
 
 function parseBooleanEnv(value, defaultValue) {

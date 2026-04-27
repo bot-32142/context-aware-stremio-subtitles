@@ -1,13 +1,45 @@
 services:
   addon:
-    build: .
-    container_name: context-aware-stremio-subtitles
+    build:
+      context: .
+    image: ${IMAGE_NAME:-context-aware-stremio-subtitles:local}
+    container_name: ${CONTAINER_NAME:-context-aware-stremio-subtitles}
     restart: unless-stopped
     env_file:
-      - .env
+      - ${ADDON_PROFILE_FILE:-./docker/profiles/public.env}
+    environment:
+      BASE_URL: ${BASE_URL:-}
+      SOURCE_LANGUAGES: ${SOURCE_LANGUAGES:-eng}
+      TARGET_LANGUAGE: ${TARGET_LANGUAGE:-}
+      MAX_SUBTITLES_PER_LANGUAGE: ${MAX_SUBTITLES_PER_LANGUAGE:-5}
+      PROVIDER_TIMEOUT_MS: ${PROVIDER_TIMEOUT_MS:-12000}
+      ID_RESOLVER_TIMEOUT_MS: ${ID_RESOLVER_TIMEOUT_MS:-8000}
+      DEDUPLICATE_SUBTITLES: ${DEDUPLICATE_SUBTITLES:-true}
+      EXCLUDE_HEARING_IMPAIRED_SUBTITLES: ${EXCLUDE_HEARING_IMPAIRED_SUBTITLES:-false}
+      SCS_MANIFEST_TOKEN: ${SCS_MANIFEST_TOKEN:-}
+      SUBDL_API_KEY: ${SUBDL_API_KEY:-}
+      SUBSOURCE_API_KEY: ${SUBSOURCE_API_KEY:-}
+      SUBSRO_API_KEY: ${SUBSRO_API_KEY:-}
+      WYZIE_API_KEY: ${WYZIE_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      DEEPL_API_KEY: ${DEEPL_API_KEY:-}
     ports:
-      - "7001:7001"
+      - "${HOST_PORT:-7001}:7001"
     volumes:
-      - ./data:/app/data
-      # Mount your CAT checkout if CAT_CLI_CMD uses uv --directory inside the container.
-      # - /home/mini/context-aware-translation:/cat:ro
+      - ${ADDON_DATA_DIR:-./data}:/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:7001/healthz').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

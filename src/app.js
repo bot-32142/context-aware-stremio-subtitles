@@ -165,7 +165,7 @@ async function handleSubtitles(req, res, { config, provider }) {
   if (config.translationEnabled) {
     const sourceSubtitles = ranked.filter(subtitle => sourceLangs.has(subtitle.languageCode));
     for (const targetLanguage of config.targetLanguages) {
-      const targetName = getLanguageName(targetLanguage);
+      const targetName = config.targetLanguageNames?.[targetLanguage] || getLanguageName(targetLanguage);
       for (const subtitle of sourceSubtitles) {
         const url = new URL(`${baseUrl}/translate/${encodeURIComponent(subtitle.fileId)}/${encodeURIComponent(targetLanguage)}`);
         url.searchParams.set("type", req.params.type);

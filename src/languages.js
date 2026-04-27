@@ -117,11 +117,44 @@ const LANGUAGE_NAMES = {
   vie: "Vietnamese"
 };
 
+const LANGUAGE_DISPLAY_NAMES = {
+  "brazilian portuguese": "Brazilian Portuguese",
+  pob: "Brazilian Portuguese",
+  "portuguese brazil": "Brazilian Portuguese",
+  "portuguese br": "Brazilian Portuguese",
+  "pt br": "Brazilian Portuguese",
+  "simplified chinese": "Simplified Chinese",
+  chs: "Simplified Chinese",
+  "traditional chinese": "Traditional Chinese",
+  cht: "Traditional Chinese",
+  zhs: "Simplified Chinese",
+  zht: "Traditional Chinese",
+  "zh hans": "Simplified Chinese",
+  "zh hant": "Traditional Chinese"
+};
+
+const LANGUAGE_NAME_ALIASES = Object.fromEntries(
+  Object.entries(LANGUAGE_NAMES).map(([code, name]) => [name.toLowerCase(), code])
+);
+Object.assign(LANGUAGE_NAME_ALIASES, {
+  "brazilian portuguese": "por",
+  pob: "por",
+  "portuguese brazil": "por",
+  "portuguese br": "por",
+  "pt br": "por",
+  "simplified chinese": "chi",
+  "traditional chinese": "chi",
+  "zh hans": "chi",
+  "zh hant": "chi"
+});
+
 function normalizeLanguageCode(value) {
   const raw = String(value || "").trim().toLowerCase();
   if (!raw) return "";
+  const normalizedName = normalizeLanguageName(raw);
   const bcp47Base = raw.split("-")[0];
   if (ALIASES[raw]) return ALIASES[raw];
+  if (LANGUAGE_NAME_ALIASES[normalizedName]) return LANGUAGE_NAME_ALIASES[normalizedName];
   if (ISO1_TO_ISO3[raw]) return ISO1_TO_ISO3[raw];
   if (ISO1_TO_ISO3[bcp47Base]) return ISO1_TO_ISO3[bcp47Base];
   if (/^[a-z]{3}$/.test(raw)) return ALIASES[raw] || raw;
@@ -141,12 +174,28 @@ function getLanguageName(code) {
   return LANGUAGE_NAMES[normalized] || normalized.toUpperCase();
 }
 
+function getLanguageLabel(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  return LANGUAGE_DISPLAY_NAMES[normalizeLanguageName(raw)] || getLanguageName(raw);
+}
+
 function toISO6391(code) {
   const normalized = normalizeLanguageCode(code);
   return ISO3_TO_ISO1[normalized] || (/^[a-z]{2}$/.test(String(code || "").toLowerCase()) ? String(code).toLowerCase() : "");
 }
 
+function normalizeLanguageName(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[()[\]_.-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 module.exports = {
+  getLanguageLabel,
   getLanguageName,
   normalizeLanguageCode,
   parseLanguageList,

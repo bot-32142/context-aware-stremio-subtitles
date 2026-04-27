@@ -27,3 +27,13 @@ test("translation stays disabled by default until CAT config is present", () => 
   const config = loadConfig({});
   assert.equal(config.translationEnabled, false);
 });
+
+test("TARGET_LANGUAGE accepts names and drives one target code", () => {
+  const english = loadConfig({ TARGET_LANGUAGE: "English" });
+  const traditionalChinese = loadConfig({ TARGET_LANGUAGE: "Traditional Chinese" });
+
+  assert.deepEqual(english.targetLanguages, ["eng"]);
+  assert.equal(english.targetLanguageNames.eng, "English");
+  assert.deepEqual(traditionalChinese.targetLanguages, ["chi"]);
+  assert.equal(traditionalChinese.targetLanguageNames.chi, "Traditional Chinese");
+});
