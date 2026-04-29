@@ -19,9 +19,9 @@ The addon also responds on:
 - `http://<host-ip>:7001/`
 - `http://<host-ip>:7001/help`
 
-## Consistency
+## Motivation
 
-The addon uses one [CAT](https://github.com/bot-32142/context-aware-translation) to basically ensures that all terminologies are consistently translated across different season and episode in a show. In addition, it is recommended to translate in chronological order as CAT uses translation order to handle context summary and injection.
+The addon uses [CAT](https://github.com/bot-32142/context-aware-translation) to ensure that **all terminologies are consistently translated** across different season and episode in a show. (Tests have been performed across multiple books/shows and no inconsistency in translation has been found so far.) In addition, it is recommended to **translate in chronological order** as CAT uses translation order to handle context summary and injection.
 
 The tradeoff is speed: translated subtitles are slower than plain subtitle results.
 
