@@ -51,33 +51,35 @@ test("manifest route includes permissive CORS headers", async () => {
     const response = await fetch(`${baseUrl}/manifest.json`);
 
     assert.equal(response.headers.get("access-control-allow-origin"), "*");
+    assert.match(response.headers.get("cache-control") || "", /no-store/);
   } finally {
     await close();
   }
 });
 
-test("subtitle route includes direct subtitles and Make entries", async () => {
+test("subtitle route returns only translated entries when translation is enabled", async () => {
   const { baseUrl, close } = await serveTestApp({ env: { ENABLE_TRANSLATION: "true" } });
   try {
     const response = await fetch(`${baseUrl}/subtitles/series/tt0944947:1:1.json?filename=show.s01e01.mkv`);
     const payload = await response.json();
     const labels = payload.subtitles.map(item => item.lang);
 
-    assert.equal(labels.includes("eng"), true);
-    assert.equal(labels.includes("Make Chinese"), true);
+    assert.equal(labels.includes("eng"), false);
+    assert.equal(labels.every(label => label === "chi"), true);
     assert.equal(payload.subtitles.some(item => item.url.includes("/translate/source1/chi")), true);
+    assert.match(response.headers.get("cache-control") || "", /no-store/);
   } finally {
     await close();
   }
 });
 
-test("subtitle route labels Make entries from configured target language", async () => {
+test("subtitle route uses ISO codes for translated entries", async () => {
   const { baseUrl, close } = await serveTestApp({ env: { ENABLE_TRANSLATION: "true", TARGET_LANGUAGE: "Spanish" } });
   try {
     const response = await fetch(`${baseUrl}/subtitles/series/tt0944947:1:1.json?filename=show.s01e01.mkv`);
     const payload = await response.json();
 
-    assert.equal(payload.subtitles.some(item => item.lang === "Make Spanish"), true);
+    assert.equal(payload.subtitles.some(item => item.lang === "spa"), true);
     assert.equal(payload.subtitles.some(item => item.url.includes("/translate/source1/spa")), true);
   } finally {
     await close();
@@ -90,7 +92,7 @@ test("subtitle route accepts English as a single target language", async () => {
     const response = await fetch(`${baseUrl}/subtitles/series/tt0944947:1:1.json?filename=show.s01e01.mkv`);
     const payload = await response.json();
 
-    assert.equal(payload.subtitles.some(item => item.lang === "Make English"), true);
+    assert.equal(payload.subtitles.some(item => item.lang === "eng"), true);
     assert.equal(payload.subtitles.some(item => item.url.includes("/translate/source1/eng")), true);
   } finally {
     await close();
@@ -105,7 +107,7 @@ test("subtitle route preserves target language display variants", async () => {
     const response = await fetch(`${baseUrl}/subtitles/series/tt0944947:1:1.json?filename=show.s01e01.mkv`);
     const payload = await response.json();
 
-    assert.equal(payload.subtitles.some(item => item.lang === "Make Traditional Chinese"), true);
+    assert.equal(payload.subtitles.some(item => item.lang === "chi"), true);
     assert.equal(payload.subtitles.some(item => item.url.includes("/translate/source1/chi")), true);
   } finally {
     await close();
@@ -118,7 +120,8 @@ test("subtitle route omits Make entries when translation is disabled", async () 
     const response = await fetch(`${baseUrl}/subtitles/series/tt0944947:1:1.json?filename=show.s01e01.mkv`);
     const payload = await response.json();
 
-    assert.equal(payload.subtitles.some(item => item.lang.startsWith("Make ")), false);
+    assert.equal(payload.subtitles.some(item => item.url.includes("/translate/")), false);
+    assert.equal(payload.subtitles.some(item => item.lang === "eng"), true);
   } finally {
     await close();
   }
@@ -126,6 +129,32 @@ test("subtitle route omits Make entries when translation is disabled", async () 
 
 test("subtitle route returns an empty list when provider search fails", async () => {
   const { baseUrl, close } = await serveTestApp({ provider: new FailingSearchProvider() });
+  try {
+    const response = await fetch(`${baseUrl}/subtitles/series/tt0944947:1:1.json`);
+    const payload = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(payload, { subtitles: [] });
+  } finally {
+    await close();
+  }
+});
+
+test("subtitle route filters undetermined language entries out of the response", async () => {
+  const { baseUrl, close } = await serveTestApp({ provider: new UnknownLanguageProvider(), env: { ENABLE_TRANSLATION: "true" } });
+  try {
+    const response = await fetch(`${baseUrl}/subtitles/series/tt0944947:1:1.json?filename=show.s01e01.mkv`);
+    const payload = await response.json();
+
+    assert.equal(payload.subtitles.some(item => item.lang === "und" || item.lang === "unknown(und)"), false);
+    assert.equal(payload.subtitles.some(item => item.lang === "chi"), true);
+  } finally {
+    await close();
+  }
+});
+
+test("subtitle route returns an empty list instead of throwing on malformed provider results", async () => {
+  const { baseUrl, close } = await serveTestApp({ provider: new MalformedResultProvider() });
   try {
     const response = await fetch(`${baseUrl}/subtitles/series/tt0944947:1:1.json`);
     const payload = await response.json();
@@ -221,6 +250,28 @@ class StubProvider {
 class FailingSearchProvider extends StubProvider {
   async search() {
     throw new Error("provider down");
+  }
+}
+
+class UnknownLanguageProvider extends StubProvider {
+  async search() {
+    return [
+      { fileId: "unknown1", languageCode: "und", language: "und", name: "show s01e01 mystery" },
+      { fileId: "source1", languageCode: "eng", name: "show s01e01 english" }
+    ];
+  }
+}
+
+class MalformedResultProvider extends StubProvider {
+  async search() {
+    return [
+      {
+        get languageCode() {
+          throw new Error("broken subtitle payload");
+        },
+        fileId: "broken1"
+      }
+    ];
   }
 }
 

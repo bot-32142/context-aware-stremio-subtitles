@@ -306,6 +306,7 @@ ${line}
 function fakeCliScript() {
   return `
 const fs = require("node:fs");
+const path = require("node:path");
 const args = process.argv.slice(2);
 const callsPath = process.env.FAKE_CAT_CALLS;
 const calls = fs.existsSync(callsPath) ? JSON.parse(fs.readFileSync(callsPath, "utf8")) : [];
@@ -327,6 +328,13 @@ if (args.includes("books") && args.includes("list")) {
 const outputPath = args[args.indexOf("--output") + 1];
 const bookIdIndex = args.indexOf("--book-id");
 const bookId = bookIdIndex >= 0 ? args[bookIdIndex + 1] : "book-created-1";
+const libraryRootIndex = args.indexOf("--library-root");
+const libraryRoot = libraryRootIndex >= 0 ? args[libraryRootIndex + 1] : "";
+if (libraryRoot) {
+  const bookDir = path.join(libraryRoot, "books", bookId);
+  fs.mkdirSync(bookDir, { recursive: true });
+  fs.writeFileSync(path.join(bookDir, "book.db"), "fake", "utf8");
+}
 fs.writeFileSync(outputPath, "1\\n00:00:01,000 --> 00:00:02,000\\nTranslated with " + bookId + "\\n", "utf8");
 
 console.log(JSON.stringify({
@@ -348,6 +356,7 @@ console.log(JSON.stringify({
 function failingCliScript() {
   return `
 const fs = require("node:fs");
+const path = require("node:path");
 const args = process.argv.slice(2);
 const callsPath = process.env.FAKE_CAT_CALLS;
 const calls = fs.existsSync(callsPath) ? JSON.parse(fs.readFileSync(callsPath, "utf8")) : [];
@@ -368,7 +377,14 @@ if (args.includes("books") && args.includes("list")) {
 
 const outputPath = args[args.indexOf("--output") + 1];
 const bookIdIndex = args.indexOf("--book-id");
+const libraryRootIndex = args.indexOf("--library-root");
+const libraryRoot = libraryRootIndex >= 0 ? args[libraryRootIndex + 1] : "";
 if (bookIdIndex === -1) {
+  if (libraryRoot) {
+    const bookDir = path.join(libraryRoot, "books", "book-created-on-failure");
+    fs.mkdirSync(bookDir, { recursive: true });
+    fs.writeFileSync(path.join(bookDir, "book.db"), "fake", "utf8");
+  }
   console.log(JSON.stringify({
     ok: false,
     command: "run",
@@ -385,6 +401,11 @@ if (bookIdIndex === -1) {
   process.exit(1);
 }
 
+if (libraryRoot) {
+  const bookDir = path.join(libraryRoot, "books", args[bookIdIndex + 1]);
+  fs.mkdirSync(bookDir, { recursive: true });
+  fs.writeFileSync(path.join(bookDir, "book.db"), "fake", "utf8");
+}
 fs.writeFileSync(outputPath, "1\\n00:00:01,000 --> 00:00:02,000\\nTranslated with recovered book\\n", "utf8");
 console.log(JSON.stringify({
   ok: true,

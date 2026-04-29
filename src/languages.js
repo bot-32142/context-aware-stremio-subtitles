@@ -152,6 +152,8 @@ function normalizeLanguageCode(value) {
   const raw = String(value || "").trim().toLowerCase();
   if (!raw) return "";
   const normalizedName = normalizeLanguageName(raw);
+  if (["und", "unknown", "undefined", "undetermined", "not specified"].includes(raw)) return "";
+  if (["unknown", "undefined", "undetermined", "not specified"].includes(normalizedName)) return "";
   const bcp47Base = raw.split("-")[0];
   if (ALIASES[raw]) return ALIASES[raw];
   if (LANGUAGE_NAME_ALIASES[normalizedName]) return LANGUAGE_NAME_ALIASES[normalizedName];

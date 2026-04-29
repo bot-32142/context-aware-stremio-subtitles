@@ -2,7 +2,8 @@ const express = require("express");
 const path = require("node:path");
 const { BookRegistry } = require("./bookRegistry");
 const { CatCli } = require("./catCli");
-const { getLanguageName, normalizeLanguageCode } = require("./languages");
+const { normalizeLanguageCode } = require("./languages");
+const log = require("./logger");
 const { mediaContextKey, parseStremioId } = require("./media");
 const { ProviderManager } = require("./providers");
 const { finalizeSubtitleResults, rankAndLimitSubtitles } = require("./subtitleRanking");
@@ -73,15 +74,26 @@ function createApp({ config, provider, registry, catCli, translationManager } = 
 
   app.get("/manifest.json", (req, res) => {
     const baseUrl = resolveBaseUrl(req, config.baseUrl);
+    setNoStore(res);
     res.json(buildManifest(config, baseUrl));
   });
 
   app.get("/subtitles/:type/:id.json", async (req, res) => {
-    return handleSubtitles(req, res, { config, provider: resolvedProvider });
+    try {
+      await handleSubtitles(req, res, { config, provider: resolvedProvider });
+    } catch (error) {
+      log.warn(() => `[Route] subtitles ${req.params.type}/${req.params.id} failed: ${error.message}`);
+      res.json({ subtitles: [] });
+    }
   });
 
   app.get("/subtitles/:type/:id/:extra.json", async (req, res) => {
-    return handleSubtitles(req, res, { config, provider: resolvedProvider });
+    try {
+      await handleSubtitles(req, res, { config, provider: resolvedProvider });
+    } catch (error) {
+      log.warn(() => `[Route] subtitles ${req.params.type}/${req.params.id} failed: ${error.message}`);
+      res.json({ subtitles: [] });
+    }
   });
 
   app.get("/subtitle/:fileId/:language", async (req, res) => {
@@ -154,18 +166,19 @@ async function handleSubtitles(req, res, { config, provider }) {
     filename: extras.filename || "",
   });
 
-  const directEntries = ranked.map(subtitle => ({
-    id: subtitle.fileId,
-    lang: subtitle.languageCode,
-    url: `${baseUrl}/subtitle/${encodeURIComponent(subtitle.fileId)}/${encodeURIComponent(subtitle.languageCode)}`
-  }));
+  const directEntries = config.translationEnabled
+    ? []
+    : ranked.map(subtitle => ({
+        id: subtitle.fileId,
+        lang: subtitleListLabel(subtitle),
+        url: `${baseUrl}/subtitle/${encodeURIComponent(subtitle.fileId)}/${encodeURIComponent(subtitle.languageCode)}`
+      }));
 
   const sourceLangs = new Set(config.sourceLanguages.map(normalizeLanguageCode));
   const translationEntries = [];
   if (config.translationEnabled) {
     const sourceSubtitles = ranked.filter(subtitle => sourceLangs.has(subtitle.languageCode));
     for (const targetLanguage of config.targetLanguages) {
-      const targetName = config.targetLanguageNames?.[targetLanguage] || getLanguageName(targetLanguage);
       for (const subtitle of sourceSubtitles) {
         const url = new URL(`${baseUrl}/translate/${encodeURIComponent(subtitle.fileId)}/${encodeURIComponent(targetLanguage)}`);
         url.searchParams.set("type", req.params.type);
@@ -174,13 +187,14 @@ async function handleSubtitles(req, res, { config, provider }) {
         url.searchParams.set("sourceLang", subtitle.languageCode);
         translationEntries.push({
           id: `translate_${subtitle.fileId}_to_${targetLanguage}`,
-          lang: `Make ${targetName}`,
+          lang: translatedSubtitleLang(targetLanguage),
           url: url.toString()
         });
       }
     }
   }
 
+  setNoStore(res);
   res.json({ subtitles: [...directEntries, ...translationEntries] });
 }
 
@@ -220,6 +234,19 @@ function setNoStore(res) {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   res.setHeader("Pragma", "no-cache");
   res.setHeader("Expires", "0");
+}
+
+function subtitleListLabel(subtitle) {
+  const code = normalizeLanguageCode(subtitle?.languageCode || subtitle?.language || "");
+  if (code) return code;
+
+  const fallback = String(subtitle?.language || "").trim();
+  if (fallback && !["und", "unknown", "undefined"].includes(fallback.toLowerCase())) return fallback;
+  return "subtitle";
+}
+
+function translatedSubtitleLang(targetLanguage) {
+  return normalizeLanguageCode(targetLanguage) || String(targetLanguage || "subtitle");
 }
 
 function safeName(value) {
