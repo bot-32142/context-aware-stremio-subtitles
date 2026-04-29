@@ -21,9 +21,9 @@ The addon also responds on:
 
 ## Consistency
 
-When translation is enabled, the addon reuses one CAT book per show and target language. That helps keep terminology and phrasing more consistent across episodes and seasons.
+The addon uses one [CAT](https://github.com/bot-32142/context-aware-translation) to basically ensures that all terminologies are consistently translated across different season and episode in a show. In addition, it is recommended to translate in chronological order as CAT uses translation order to handle context summary and injection.
 
-The tradeoff is speed: translated subtitles are slower than plain subtitle results, and the first translation for a show is usually the slowest.
+The tradeoff is speed: translated subtitles are slower than plain subtitle results.
 
 ## Configure
 
