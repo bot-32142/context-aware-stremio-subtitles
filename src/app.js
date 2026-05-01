@@ -155,7 +155,8 @@ async function handleSubtitles(req, res, { config, provider }) {
 
   const extras = parseExtras(req);
   const baseUrl = resolveBaseUrl(req, config.baseUrl);
-  const searchLanguages = [...new Set([...config.sourceLanguages, ...config.targetLanguages])];
+  const requestedLanguages = [...new Set([...config.sourceLanguages, ...config.targetLanguages])];
+  const searchLanguages = config.translationEnabled ? [] : requestedLanguages;
   let found = [];
   try {
     found = await provider.search(mediaInfo, searchLanguages, extras);
@@ -166,36 +167,40 @@ async function handleSubtitles(req, res, { config, provider }) {
     filename: extras.filename || "",
   });
 
-  const directEntries = config.translationEnabled
-    ? []
-    : ranked.map(subtitle => ({
-        id: subtitle.fileId,
-        lang: subtitleListLabel(subtitle),
-        url: `${baseUrl}/subtitle/${encodeURIComponent(subtitle.fileId)}/${encodeURIComponent(subtitle.languageCode)}`
-      }));
+  const directEntries = ranked.map(subtitle => ({
+    id: subtitle.fileId,
+    lang: subtitleListLabel(subtitle),
+    url: `${baseUrl}/subtitle/${encodeURIComponent(subtitle.fileId)}/${encodeURIComponent(subtitle.languageCode)}`
+  }));
 
   const sourceLangs = new Set(config.sourceLanguages.map(normalizeLanguageCode));
+  const targetLangs = new Set(config.targetLanguages.map(normalizeLanguageCode));
   const translationEntries = [];
   if (config.translationEnabled) {
     const sourceSubtitles = ranked.filter(subtitle => sourceLangs.has(subtitle.languageCode));
+    const translationSource = sourceSubtitles.length
+      ? sourceSubtitles
+      : ranked.filter(subtitle => !targetLangs.has(subtitle.languageCode)).slice(0, 1);
     for (const targetLanguage of config.targetLanguages) {
-      for (const subtitle of sourceSubtitles) {
-        const url = new URL(`${baseUrl}/translate/${encodeURIComponent(subtitle.fileId)}/${encodeURIComponent(targetLanguage)}`);
-        url.searchParams.set("type", req.params.type);
-        url.searchParams.set("id", req.params.id);
-        if (extras.filename) url.searchParams.set("filename", extras.filename);
-        url.searchParams.set("sourceLang", subtitle.languageCode);
-        translationEntries.push({
-          id: `translate_${subtitle.fileId}_to_${targetLanguage}`,
-          lang: translatedSubtitleLang(targetLanguage),
-          url: url.toString()
-        });
-      }
+      const subtitle = translationSource[0];
+      if (!subtitle) continue;
+      const url = new URL(`${baseUrl}/translate/${encodeURIComponent(subtitle.fileId)}/${encodeURIComponent(targetLanguage)}`);
+      url.searchParams.set("type", req.params.type);
+      url.searchParams.set("id", req.params.id);
+      if (extras.filename) url.searchParams.set("filename", extras.filename);
+      url.searchParams.set("sourceLang", subtitle.languageCode);
+      translationEntries.push({
+        id: `translate_${req.params.type}_${req.params.id}_to_${targetLanguage}`,
+        lang: translatedSubtitleLang(targetLanguage),
+        url: url.toString()
+      });
     }
   }
 
+  const visibleDirectEntries = config.translationEnabled && translationEntries.length ? [] : directEntries;
+
   setNoStore(res);
-  res.json({ subtitles: [...directEntries, ...translationEntries] });
+  res.json({ subtitles: [...visibleDirectEntries, ...translationEntries] });
 }
 
 function buildManifest(config, baseUrl) {

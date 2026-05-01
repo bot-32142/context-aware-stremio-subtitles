@@ -67,8 +67,8 @@ function buildCatCliArgs(options) {
 async function catConfigFingerprint(configPath) {
   if (!configPath) return "default";
   try {
-    const stat = await fs.stat(configPath);
-    return sha256(`${configPath}:${stat.size}:${stat.mtimeMs}`);
+    const content = await fs.readFile(configPath);
+    return sha256(`${configPath}:sha256:${sha256(content)}`);
   } catch (error) {
     if (error.code === "ENOENT") return sha256(`${configPath}:missing`);
     throw error;

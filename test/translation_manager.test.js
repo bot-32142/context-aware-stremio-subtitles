@@ -101,6 +101,75 @@ test("translation manager serves request cache without redownloading source", as
   assert.equal(provider.downloadCount, 1);
 });
 
+test("translation manager keeps one canonical translation per episode and target language", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "cat-manager-episode-key-"));
+  const catConfigPath = path.join(tmp, "cat.yaml");
+  await fs.writeFile(catConfigPath, "version: 1\n", "utf8");
+  const config = loadConfig({
+    DATA_DIR: tmp,
+    CAT_CONFIG: catConfigPath,
+    SOURCE_LANGUAGES: "eng",
+    TARGET_LANGUAGES: "chi"
+  });
+  const provider = new CountingProvider({ source1: makeSrt("Hello."), source2: makeSrt("Different source text.") });
+  const catCli = new CountingMemoryCatCli();
+  const manager = new TranslationManager({
+    config,
+    provider,
+    registry: new BookRegistry(path.join(tmp, "book-registry.json")),
+    catCli
+  });
+  const mediaInfo = parseStremioId("series", "tt0944947:1:1");
+
+  assert.equal((await manager.requestTranslation({ sourceFileId: "source1", targetLanguage: "chi", mediaInfo })).state, "loading");
+  await manager.waitForAll();
+  assert.equal(catCli.calls, 1);
+
+  const cached = await manager.requestTranslation({ sourceFileId: "source2", targetLanguage: "chi", mediaInfo });
+  assert.equal(cached.state, "complete");
+  assert.match(cached.content, /Translated/);
+  assert.equal(catCli.calls, 1);
+});
+
+test("translation manager reuses cached translation immediately for the same episode even if provider file id changes", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "cat-manager-source-hash-"));
+  const catConfigPath = path.join(tmp, "cat.yaml");
+  await fs.writeFile(catConfigPath, "version: 1\n", "utf8");
+  const config = loadConfig({
+    DATA_DIR: tmp,
+    CAT_CONFIG: catConfigPath,
+    SOURCE_LANGUAGES: "eng",
+    TARGET_LANGUAGES: "chi"
+  });
+  const firstCatCli = new CountingMemoryCatCli();
+  const firstManager = new TranslationManager({
+    config,
+    provider: new CountingProvider({ source1: makeSrt("Hello.") }),
+    registry: new BookRegistry(path.join(tmp, "book-registry.json")),
+    catCli: firstCatCli
+  });
+  const mediaInfo = parseStremioId("series", "tt0944947:1:1");
+
+  assert.equal((await firstManager.requestTranslation({ sourceFileId: "source1", targetLanguage: "chi", mediaInfo })).state, "loading");
+  await firstManager.waitForAll();
+  assert.equal(firstCatCli.calls, 1);
+
+  const secondCatCli = new CountingMemoryCatCli();
+  const secondProvider = new CountingProvider({ source2: makeSrt("Hello.") });
+  const secondManager = new TranslationManager({
+    config,
+    provider: secondProvider,
+    registry: new BookRegistry(path.join(tmp, "book-registry.json")),
+    catCli: secondCatCli
+  });
+
+  const cached = await secondManager.requestTranslation({ sourceFileId: "source2", targetLanguage: "chi", mediaInfo });
+  assert.equal(cached.state, "complete");
+  assert.match(cached.content, /Translated/);
+  assert.equal(secondProvider.downloadCount, 0);
+  assert.equal(secondCatCli.calls, 0);
+});
+
 test("translation manager does not store cat-cli failures as final cache", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "cat-manager-fail-"));
   const catConfigPath = path.join(tmp, "cat.yaml");
@@ -239,6 +308,18 @@ class MemoryCatCli {
   async run(options) {
     await fs.writeFile(options.outputPath, makeSrt("Translated."), "utf8");
     return { book_id: options.bookId || "memory-book" };
+  }
+}
+
+class CountingMemoryCatCli extends MemoryCatCli {
+  constructor() {
+    super();
+    this.calls = 0;
+  }
+
+  async run(options) {
+    this.calls += 1;
+    return super.run(options);
   }
 }
 

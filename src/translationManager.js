@@ -1,7 +1,7 @@
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { catConfigFingerprint } = require("./catCli");
-const { mediaBookName, mediaContextKey } = require("./media");
+const { mediaBookName, mediaContextKey, mediaTranslationKey } = require("./media");
 const { sha256, sha256Buffer } = require("./hash");
 const { detectSubtitleFormat, normalizeSubtitleFormat } = require("./subtitleFormat");
 const { errorSubtitle, loadingSubtitle } = require("./subtitleMessages");
@@ -18,8 +18,9 @@ class TranslationManager {
 
   async requestTranslation({ sourceFileId, targetLanguage, mediaInfo, filename = "", sourceLanguage = "" }) {
     const registryKey = mediaContextKey(mediaInfo, targetLanguage);
+    const translationKey = mediaTranslationKey(mediaInfo, targetLanguage);
     const fingerprint = await catConfigFingerprint(this.config.catConfig);
-    const requestKey = this._requestKey({ registryKey, sourceFileId, targetLanguage, fingerprint });
+    const requestKey = this._requestKey({ translationKey });
     const cachedByRequest = await this._readCachedByRequestKey(requestKey);
     if (cachedByRequest) {
       return { state: "complete", content: cachedByRequest.content, format: cachedByRequest.format, cacheKey: cachedByRequest.cacheKey };
@@ -39,11 +40,12 @@ class TranslationManager {
       sourceFileId,
       targetLanguage,
       mediaInfo,
-      filename,
-      sourceLanguage,
-      registryKey,
-      fingerprint
-    });
+        filename,
+        sourceLanguage,
+        registryKey,
+        translationKey,
+        fingerprint
+      });
     this.inFlight.set(requestKey, job);
     job.finally(() => this.inFlight.delete(requestKey)).catch(() => {});
     return { state: "loading", content: loadingSubtitle(), format: "srt", cacheKey: requestKey };
@@ -55,15 +57,28 @@ class TranslationManager {
       const sourceContent = downloaded.content;
       const format = normalizeSubtitleFormat(downloaded.format || detectSubtitleFormat(sourceContent));
       const sourceHash = sha256Buffer(Buffer.from(sourceContent, "utf8"));
+      const reusable = await this._recoverCachedBySourceHash({
+        requestKey: jobBase.requestKey,
+        registryKey: jobBase.registryKey,
+        translationKey: jobBase.translationKey,
+        targetLanguage: jobBase.targetLanguage,
+        sourceHash,
+        fingerprint: jobBase.fingerprint
+      });
+      if (reusable) return;
+
       const cacheKey = sha256(
-        `${jobBase.registryKey}:${jobBase.sourceFileId}:${jobBase.targetLanguage}:${sourceHash}:${jobBase.fingerprint}:${format}`
+        `${jobBase.translationKey}:${format}`
       );
       const cached = await this._readCachedTranslation(cacheKey, format);
       if (cached) {
         await this._writeCacheMetadata(jobBase.requestKey, {
           cacheKey,
           format: cached.format,
+          translationKey: jobBase.translationKey,
           sourceHash,
+          sourceFileId: jobBase.sourceFileId,
+          sourceLanguage: jobBase.sourceLanguage,
           registryKey: jobBase.registryKey,
           targetLanguage: jobBase.targetLanguage,
           fingerprint: jobBase.fingerprint
@@ -81,7 +96,10 @@ class TranslationManager {
       await this._writeCacheMetadata(jobBase.requestKey, {
         cacheKey,
         format,
+        translationKey: jobBase.translationKey,
         sourceHash,
+        sourceFileId: jobBase.sourceFileId,
+        sourceLanguage: jobBase.sourceLanguage,
         registryKey: jobBase.registryKey,
         targetLanguage: jobBase.targetLanguage,
         fingerprint: jobBase.fingerprint
@@ -192,8 +210,8 @@ class TranslationManager {
     }
   }
 
-  _requestKey({ registryKey, sourceFileId, targetLanguage, fingerprint }) {
-    return sha256(`${registryKey}:${sourceFileId}:${targetLanguage}:${fingerprint}`);
+  _requestKey({ translationKey }) {
+    return sha256(translationKey);
   }
 
   _finalPath(cacheKey, format) {
@@ -249,6 +267,43 @@ class TranslationManager {
       if (content) return { content, format: candidate };
     }
     return null;
+  }
+
+  async _recoverCachedBySourceHash({ requestKey, registryKey, translationKey, targetLanguage, sourceHash, fingerprint }) {
+    const entries = await listMetadataFiles(this.config.translationDir);
+    for (const entry of entries) {
+      const metadata = await readJsonIfExists(path.join(this.config.translationDir, entry));
+      if (!metadata?.cacheKey || !metadata?.format) continue;
+      if (metadata.translationKey && metadata.translationKey !== translationKey) continue;
+      if (metadata.registryKey !== registryKey) continue;
+      if (metadata.targetLanguage !== targetLanguage) continue;
+      if (metadata.sourceHash !== sourceHash) continue;
+
+      const cached = await this._readCachedTranslation(metadata.cacheKey, metadata.format);
+      if (!cached) continue;
+
+      await this._writeCacheMetadata(requestKey, {
+        cacheKey: metadata.cacheKey,
+        format: cached.format,
+        translationKey,
+        sourceHash,
+        registryKey,
+        targetLanguage,
+        fingerprint
+      });
+      return { ...cached, cacheKey: metadata.cacheKey };
+    }
+    return null;
+  }
+}
+
+async function listMetadataFiles(dirPath) {
+  try {
+    const entries = await fs.readdir(dirPath);
+    return entries.filter(entry => entry.endsWith(".metadata.json"));
+  } catch (error) {
+    if (error.code === "ENOENT") return [];
+    throw error;
   }
 }
 

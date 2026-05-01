@@ -82,6 +82,16 @@ function mediaContextKey(mediaInfo, targetLanguage) {
   return `${scope}:${mediaInfo.rootId}:${String(targetLanguage || "").toLowerCase()}`;
 }
 
+function mediaTranslationKey(mediaInfo, targetLanguage) {
+  if (!mediaInfo || !mediaInfo.rootId) {
+    throw new Error("Cannot build translation key without media information.");
+  }
+  const scope = mediaInfo.type === "movie" ? "movie" : mediaInfo.type === "anime" ? "anime" : "series";
+  const target = String(targetLanguage || "").toLowerCase();
+  if (mediaInfo.isEpisode) return `${scope}:${mediaInfo.rootId}:${mediaInfo.season}:${mediaInfo.episode}:${target}`;
+  return `${scope}:${mediaInfo.rootId}:${target}`;
+}
+
 function mediaBookName(mediaInfo, targetLanguage, filename = "") {
   const maybeName = path.basename(String(filename || "")).replace(/\.[^.]+$/, "").trim();
   const label = mediaInfo?.type === "movie" ? "Movie" : mediaInfo?.type === "anime" ? "Anime" : "Series";
@@ -100,5 +110,6 @@ function mediaBookName(mediaInfo, targetLanguage, filename = "") {
 module.exports = {
   mediaBookName,
   mediaContextKey,
+  mediaTranslationKey,
   parseStremioId
 };

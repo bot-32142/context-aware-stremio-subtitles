@@ -66,6 +66,7 @@ test("subtitle route returns only translated entries when translation is enabled
 
     assert.equal(labels.includes("eng"), false);
     assert.equal(labels.every(label => label === "chi"), true);
+    assert.equal(payload.subtitles.length, 1);
     assert.equal(payload.subtitles.some(item => item.url.includes("/translate/source1/chi")), true);
     assert.match(response.headers.get("cache-control") || "", /no-store/);
   } finally {
@@ -122,6 +123,23 @@ test("subtitle route omits Make entries when translation is disabled", async () 
 
     assert.equal(payload.subtitles.some(item => item.url.includes("/translate/")), false);
     assert.equal(payload.subtitles.some(item => item.lang === "eng"), true);
+  } finally {
+    await close();
+  }
+});
+
+test("subtitle route translates the best available subtitle when no preferred source language exists", async () => {
+  const { baseUrl, close } = await serveTestApp({
+    provider: new FallbackTranslationProvider(),
+    env: { ENABLE_TRANSLATION: "true" }
+  });
+  try {
+    const response = await fetch(`${baseUrl}/subtitles/movie/tt0133093.json?filename=The.Matrix.1999.1080p.mkv`);
+    const payload = await response.json();
+
+    assert.equal(payload.subtitles.length, 1);
+    assert.equal(payload.subtitles[0].lang, "chi");
+    assert.match(payload.subtitles[0].url, /\/translate\/spanish1\/chi/);
   } finally {
     await close();
   }
@@ -258,6 +276,16 @@ class UnknownLanguageProvider extends StubProvider {
     return [
       { fileId: "unknown1", languageCode: "und", language: "und", name: "show s01e01 mystery" },
       { fileId: "source1", languageCode: "eng", name: "show s01e01 english" }
+    ];
+  }
+}
+
+class FallbackTranslationProvider extends StubProvider {
+  async search(_mediaInfo, languages = []) {
+    if (languages.length) return [];
+    return [
+      { fileId: "spanish1", languageCode: "spa", name: "The.Matrix.1999.1080p.BluRay.x265-Tigole" },
+      { fileId: "portuguese1", languageCode: "por", name: "The.Matrix.1999.HDTV" }
     ];
   }
 }
