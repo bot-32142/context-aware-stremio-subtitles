@@ -128,6 +128,32 @@ test("subtitle route omits Make entries when translation is disabled", async () 
   }
 });
 
+test("subtitle route returns extension-bearing URLs for Stremio subtitle parsing", async () => {
+  const { baseUrl, close } = await serveTestApp();
+  try {
+    const response = await fetch(`${baseUrl}/subtitles/series/tt0944947:1:1.json?filename=show.s01e01.mkv`);
+    const payload = await response.json();
+
+    assert.equal(payload.subtitles.some(item => /\/subtitle\/source1\/eng\.srt$/.test(item.url)), true);
+    assert.equal(payload.subtitles.some(item => /\/subtitle\/target1\/chi\.srt$/.test(item.url)), true);
+  } finally {
+    await close();
+  }
+});
+
+test("translated subtitle URLs include the source subtitle format", async () => {
+  const { baseUrl, close } = await serveTestApp({ provider: new VttSourceProvider(), env: { ENABLE_TRANSLATION: "true" } });
+  try {
+    const response = await fetch(`${baseUrl}/subtitles/series/tt0944947:1:1.json?filename=show.s01e01.mkv`);
+    const payload = await response.json();
+
+    assert.equal(payload.subtitles.length, 1);
+    assert.match(payload.subtitles[0].url, /\/translate\/source-vtt\/chi\.vtt\?/);
+  } finally {
+    await close();
+  }
+});
+
 test("subtitle route translates the best available subtitle when no preferred source language exists", async () => {
   const { baseUrl, close } = await serveTestApp({
     provider: new FallbackTranslationProvider(),
@@ -187,7 +213,7 @@ test("subtitle route returns an empty list instead of throwing on malformed prov
 test("download route serves provider subtitle content", async () => {
   const { baseUrl, close } = await serveTestApp();
   try {
-    const response = await fetch(`${baseUrl}/subtitle/source1/eng`);
+    const response = await fetch(`${baseUrl}/subtitle/source1/eng.srt`);
     const body = await response.text();
 
     assert.equal(response.status, 200);
@@ -201,10 +227,11 @@ test("translate route returns loading then final cached subtitle", async () => {
   const manager = new StubTranslationManager();
   const { baseUrl, close } = await serveTestApp({ translationManager: manager, env: { ENABLE_TRANSLATION: "true" } });
   try {
-    const url = `${baseUrl}/translate/source1/chi?type=series&id=tt0944947:1:1&filename=show.s01e01.mkv`;
+    const url = `${baseUrl}/translate/source1/chi.srt?type=series&id=tt0944947:1:1&filename=show.s01e01.mkv`;
     const first = await fetch(url);
     const firstBody = await first.text();
     assert.match(firstBody, /Translation is running/);
+    assert.equal(manager.lastRequest.targetLanguage, "chi");
 
     const second = await fetch(url);
     const secondBody = await second.text();
@@ -290,6 +317,14 @@ class FallbackTranslationProvider extends StubProvider {
   }
 }
 
+class VttSourceProvider extends StubProvider {
+  async search() {
+    return [
+      { fileId: "source-vtt", languageCode: "eng", name: "show s01e01 english", format: "vtt" }
+    ];
+  }
+}
+
 class MalformedResultProvider extends StubProvider {
   async search() {
     return [
@@ -308,8 +343,9 @@ class StubTranslationManager {
     this.calls = 0;
   }
 
-  async requestTranslation() {
+  async requestTranslation(request) {
     this.calls += 1;
+    this.lastRequest = request;
     if (this.calls === 1) {
       return {
         state: "loading",

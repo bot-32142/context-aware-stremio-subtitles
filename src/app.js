@@ -7,7 +7,7 @@ const log = require("./logger");
 const { mediaContextKey, parseStremioId } = require("./media");
 const { ProviderManager } = require("./providers");
 const { finalizeSubtitleResults, rankAndLimitSubtitles } = require("./subtitleRanking");
-const { contentTypeForFormat } = require("./subtitleFormat");
+const { contentTypeForFormat, normalizeSubtitleFormat } = require("./subtitleFormat");
 const { TranslationManager } = require("./translationManager");
 const { resolveBaseUrl } = require("./config");
 
@@ -98,7 +98,8 @@ function createApp({ config, provider, registry, catCli, translationManager } = 
 
   app.get("/subtitle/:fileId/:language", async (req, res) => {
     try {
-      const downloaded = await resolvedProvider.download(req.params.fileId);
+      const language = stripSubtitleFormatSuffix(req.params.language);
+      const downloaded = await resolvedProvider.download(req.params.fileId, { languageHint: language });
       setNoStore(res);
       res.setHeader("Content-Type", contentTypeForFormat(downloaded.format));
       res.setHeader("Content-Disposition", `attachment; filename="${safeName(req.params.fileId)}.${downloaded.format}"`);
@@ -119,7 +120,7 @@ function createApp({ config, provider, registry, catCli, translationManager } = 
         res.status(400).type("text/plain").send("Missing or unsupported media id for translation.");
         return;
       }
-      const targetLanguage = normalizeLanguageCode(req.params.targetLang);
+      const targetLanguage = normalizeLanguageCode(stripSubtitleFormatSuffix(req.params.targetLang));
       const result = await translator.requestTranslation({
         sourceFileId: req.params.sourceFileId,
         targetLanguage,
@@ -170,7 +171,7 @@ async function handleSubtitles(req, res, { config, provider }) {
   const directEntries = ranked.map(subtitle => ({
     id: subtitle.fileId,
     lang: subtitleListLabel(subtitle),
-    url: `${baseUrl}/subtitle/${encodeURIComponent(subtitle.fileId)}/${encodeURIComponent(subtitle.languageCode)}`
+    url: `${baseUrl}/subtitle/${encodeURIComponent(subtitle.fileId)}/${encodeURIComponent(subtitle.languageCode)}.${subtitleUrlFormat(subtitle)}`
   }));
 
   const sourceLangs = new Set(config.sourceLanguages.map(normalizeLanguageCode));
@@ -184,7 +185,7 @@ async function handleSubtitles(req, res, { config, provider }) {
     for (const targetLanguage of config.targetLanguages) {
       const subtitle = translationSource[0];
       if (!subtitle) continue;
-      const url = new URL(`${baseUrl}/translate/${encodeURIComponent(subtitle.fileId)}/${encodeURIComponent(targetLanguage)}`);
+      const url = new URL(`${baseUrl}/translate/${encodeURIComponent(subtitle.fileId)}/${encodeURIComponent(targetLanguage)}.${subtitleUrlFormat(subtitle)}`);
       url.searchParams.set("type", req.params.type);
       url.searchParams.set("id", req.params.id);
       if (extras.filename) url.searchParams.set("filename", extras.filename);
@@ -252,6 +253,14 @@ function subtitleListLabel(subtitle) {
 
 function translatedSubtitleLang(targetLanguage) {
   return normalizeLanguageCode(targetLanguage) || String(targetLanguage || "subtitle");
+}
+
+function subtitleUrlFormat(subtitle) {
+  return normalizeSubtitleFormat(subtitle?.format || "srt");
+}
+
+function stripSubtitleFormatSuffix(value) {
+  return String(value || "").replace(/\.(srt|vtt|ass|ssa)$/i, "");
 }
 
 function safeName(value) {
