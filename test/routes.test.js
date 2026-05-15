@@ -57,7 +57,7 @@ test("manifest route includes permissive CORS headers", async () => {
   }
 });
 
-test("subtitle route returns only translated entries when translation is enabled", async () => {
+test("subtitle route prefers existing target subtitles over translation entries", async () => {
   const { baseUrl, close } = await serveTestApp({ env: { ENABLE_TRANSLATION: "true" } });
   try {
     const response = await fetch(`${baseUrl}/subtitles/series/tt0944947:1:1.json?filename=show.s01e01.mkv`);
@@ -67,7 +67,8 @@ test("subtitle route returns only translated entries when translation is enabled
     assert.equal(labels.includes("eng"), false);
     assert.equal(labels.every(label => label === "chi"), true);
     assert.equal(payload.subtitles.length, 1);
-    assert.equal(payload.subtitles.some(item => item.url.includes("/translate/source1/chi")), true);
+    assert.equal(payload.subtitles.some(item => /\/subtitle\/target1\/chi\.srt$/.test(item.url)), true);
+    assert.equal(payload.subtitles.some(item => item.url.includes("/translate/")), false);
     assert.match(response.headers.get("cache-control") || "", /no-store/);
   } finally {
     await close();
@@ -94,14 +95,16 @@ test("subtitle route accepts English as a single target language", async () => {
     const payload = await response.json();
 
     assert.equal(payload.subtitles.some(item => item.lang === "eng"), true);
-    assert.equal(payload.subtitles.some(item => item.url.includes("/translate/source1/eng")), true);
+    assert.equal(payload.subtitles.some(item => /\/subtitle\/source1\/eng\.srt$/.test(item.url)), true);
+    assert.equal(payload.subtitles.some(item => item.url.includes("/translate/")), false);
   } finally {
     await close();
   }
 });
 
-test("subtitle route preserves target language display variants", async () => {
+test("subtitle route detects existing subtitles for target language variants", async () => {
   const { baseUrl, close } = await serveTestApp({
+    provider: new ChineseVariantProvider(),
     env: { ENABLE_TRANSLATION: "true", TARGET_LANGUAGE: "Traditional Chinese" }
   });
   try {
@@ -109,7 +112,8 @@ test("subtitle route preserves target language display variants", async () => {
     const payload = await response.json();
 
     assert.equal(payload.subtitles.some(item => item.lang === "chi"), true);
-    assert.equal(payload.subtitles.some(item => item.url.includes("/translate/source1/chi")), true);
+    assert.equal(payload.subtitles.some(item => /\/subtitle\/target-zht\/zht\.srt$/.test(item.url)), true);
+    assert.equal(payload.subtitles.some(item => item.url.includes("/translate/")), false);
   } finally {
     await close();
   }
@@ -321,6 +325,15 @@ class VttSourceProvider extends StubProvider {
   async search() {
     return [
       { fileId: "source-vtt", languageCode: "eng", name: "show s01e01 english", format: "vtt" }
+    ];
+  }
+}
+
+class ChineseVariantProvider extends StubProvider {
+  async search() {
+    return [
+      { fileId: "source1", languageCode: "eng", name: "show s01e01 english" },
+      { fileId: "target-zht", languageCode: "zht", name: "show s01e01 traditional chinese" }
     ];
   }
 }

@@ -168,21 +168,25 @@ async function handleSubtitles(req, res, { config, provider }) {
     filename: extras.filename || "",
   });
 
-  const directEntries = ranked.map(subtitle => ({
+  const sourceLangs = new Set(config.sourceLanguages.map(normalizeLanguageCode));
+  const targetLangs = new Set(config.targetLanguages.map(normalizeLanguageCode));
+  const targetSubtitles = ranked.filter(subtitle => targetLangs.has(normalizeLanguageCode(subtitle.languageCode)));
+  const directSubtitles = config.translationEnabled ? targetSubtitles : ranked;
+  const directEntries = directSubtitles.map(subtitle => ({
     id: subtitle.fileId,
     lang: subtitleListLabel(subtitle),
     url: `${baseUrl}/subtitle/${encodeURIComponent(subtitle.fileId)}/${encodeURIComponent(subtitle.languageCode)}.${subtitleUrlFormat(subtitle)}`
   }));
 
-  const sourceLangs = new Set(config.sourceLanguages.map(normalizeLanguageCode));
-  const targetLangs = new Set(config.targetLanguages.map(normalizeLanguageCode));
+  const directTargetLangs = new Set(targetSubtitles.map(subtitle => normalizeLanguageCode(subtitle.languageCode)));
   const translationEntries = [];
   if (config.translationEnabled) {
-    const sourceSubtitles = ranked.filter(subtitle => sourceLangs.has(subtitle.languageCode));
+    const sourceSubtitles = ranked.filter(subtitle => sourceLangs.has(normalizeLanguageCode(subtitle.languageCode)));
     const translationSource = sourceSubtitles.length
       ? sourceSubtitles
-      : ranked.filter(subtitle => !targetLangs.has(subtitle.languageCode)).slice(0, 1);
+      : ranked.filter(subtitle => !targetLangs.has(normalizeLanguageCode(subtitle.languageCode))).slice(0, 1);
     for (const targetLanguage of config.targetLanguages) {
+      if (directTargetLangs.has(normalizeLanguageCode(targetLanguage))) continue;
       const subtitle = translationSource[0];
       if (!subtitle) continue;
       const url = new URL(`${baseUrl}/translate/${encodeURIComponent(subtitle.fileId)}/${encodeURIComponent(targetLanguage)}.${subtitleUrlFormat(subtitle)}`);
@@ -198,10 +202,8 @@ async function handleSubtitles(req, res, { config, provider }) {
     }
   }
 
-  const visibleDirectEntries = config.translationEnabled && translationEntries.length ? [] : directEntries;
-
   setNoStore(res);
-  res.json({ subtitles: [...visibleDirectEntries, ...translationEntries] });
+  res.json({ subtitles: [...directEntries, ...translationEntries] });
 }
 
 function buildManifest(config, baseUrl) {
