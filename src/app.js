@@ -1,7 +1,7 @@
 const express = require("express");
 const path = require("node:path");
 const { BookRegistry } = require("./bookRegistry");
-const { CatCli } = require("./catCli");
+const { ContextweaveCli } = require("./contextweaveCli");
 const { normalizeLanguageCode } = require("./languages");
 const log = require("./logger");
 const { mediaContextKey, parseStremioId } = require("./media");
@@ -11,7 +11,7 @@ const { contentTypeForFormat, normalizeSubtitleFormat } = require("./subtitleFor
 const { TranslationManager } = require("./translationManager");
 const { resolveBaseUrl } = require("./config");
 
-function createApp({ config, provider, registry, catCli, translationManager } = {}) {
+function createApp({ config, provider, registry, contextweaveCli, translationManager } = {}) {
   if (!config) throw new Error("createApp requires config.");
   const app = express();
   app.disable("x-powered-by");
@@ -29,13 +29,13 @@ function createApp({ config, provider, registry, catCli, translationManager } = 
 
   const resolvedProvider = provider || new ProviderManager({ config });
   const resolvedRegistry = registry || new BookRegistry(path.join(config.dataDir, "book-registry.json"));
-  const resolvedCatCli =
-    catCli ||
-    new CatCli({
-      command: config.catCliCommand,
-      libraryRoot: config.catLibraryRoot,
-      configPath: config.catConfig,
-      noPolish: config.catNoPolish
+  const resolvedContextweaveCli =
+    contextweaveCli ||
+    new ContextweaveCli({
+      command: config.contextweaveCliCommand,
+      libraryRoot: config.contextweaveLibraryRoot,
+      configPath: config.contextweaveConfig,
+      noPolish: config.contextweaveNoPolish
     });
   const translator =
     translationManager ||
@@ -43,7 +43,7 @@ function createApp({ config, provider, registry, catCli, translationManager } = 
       config,
       provider: resolvedProvider,
       registry: resolvedRegistry,
-      catCli: resolvedCatCli
+      contextweaveCli: resolvedContextweaveCli
     });
 
   app.get("/healthz", (_req, res) => {
@@ -61,7 +61,7 @@ function createApp({ config, provider, registry, catCli, translationManager } = 
       "",
       `Manifest: ${baseUrl}/manifest.json`,
       `Health: ${baseUrl}/healthz`,
-      `Translation: ${config.translationEnabled ? "enabled" : "disabled until CAT is configured"}`,
+      `Translation: ${config.translationEnabled ? "enabled" : "disabled until ContextWeave is configured"}`,
       "",
       "Install the manifest URL in Stremio to use this addon."
     ].join("\n"));
@@ -111,7 +111,7 @@ function createApp({ config, provider, registry, catCli, translationManager } = 
 
   app.get("/translate/:sourceFileId/:targetLang", async (req, res) => {
     if (!config.translationEnabled) {
-      res.status(503).type("text/plain").send("Translation is disabled. Set ENABLE_TRANSLATION=true and configure CAT_CLI_CMD/CAT_CONFIG.");
+      res.status(503).type("text/plain").send("Translation is disabled. Set ENABLE_TRANSLATION=true and configure CONTEXTWEAVE_CLI_CMD/CONTEXTWEAVE_CONFIG.");
       return;
     }
     try {
@@ -208,8 +208,8 @@ async function handleSubtitles(req, res, { config, provider }) {
 
 function buildManifest(config, baseUrl) {
   const modeDescription = config.translationEnabled
-    ? `Fetch subtitles and translate them locally with cat-cli. Sources: ${config.sourceLanguages.join(", ")}. Targets: ${config.targetLanguages.join(", ")}.`
-    : `Fetch subtitles from OpenSubtitles on your local network. Translation is disabled until CAT is configured.`;
+    ? `Fetch subtitles and translate them locally with contextweave-cli. Sources: ${config.sourceLanguages.join(", ")}. Targets: ${config.targetLanguages.join(", ")}.`
+    : `Fetch subtitles from OpenSubtitles on your local network. Translation is disabled until ContextWeave is configured.`;
   return {
     id: config.addonId,
     version: "0.1.0",

@@ -1,6 +1,0 @@
-services:
-  addon:
-    environment:
-      CAT_CONFIG: /cat-config.yaml
-    volumes:
-      - ${CAT_CONFIG_PATH:?Set CAT_CONFIG_PATH to your CAT yaml config}:/cat-config.yaml:ro

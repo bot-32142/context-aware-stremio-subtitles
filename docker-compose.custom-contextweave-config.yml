@@ -1,0 +1,6 @@
+services:
+  addon:
+    environment:
+      CONTEXTWEAVE_CONFIG: /contextweave-config.yaml
+    volumes:
+      - ${CONTEXTWEAVE_CONFIG_PATH:?Set CONTEXTWEAVE_CONFIG_PATH to your ContextWeave yaml config}:/contextweave-config.yaml:ro

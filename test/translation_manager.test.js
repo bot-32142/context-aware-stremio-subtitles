@@ -4,24 +4,24 @@ const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 const { BookRegistry } = require("../src/bookRegistry");
-const { CatCli } = require("../src/catCli");
+const { ContextweaveCli } = require("../src/contextweaveCli");
 const { loadConfig } = require("../src/config");
 const { mediaContextKey, parseStremioId } = require("../src/media");
 const { TranslationManager } = require("../src/translationManager");
 
 test("translation manager stores returned book_id and reuses it with --book-id", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "cat-manager-"));
-  const fakeCliPath = path.join(tmp, "fake-cat-cli.js");
+  const fakeCliPath = path.join(tmp, "fake-contextweave-cli.js");
   const callsPath = path.join(tmp, "calls.json");
-  const catConfigPath = path.join(tmp, "cat.yaml");
-  await fs.writeFile(catConfigPath, "version: 1\n", "utf8");
+  const contextweaveConfigPath = path.join(tmp, "contextweave.yaml");
+  await fs.writeFile(contextweaveConfigPath, "version: 1\n", "utf8");
   await fs.writeFile(fakeCliPath, fakeCliScript(), "utf8");
-  process.env.FAKE_CAT_CALLS = callsPath;
+  process.env.FAKE_CONTEXTWEAVE_CALLS = callsPath;
 
   const config = loadConfig({
     DATA_DIR: tmp,
-    CAT_CONFIG: catConfigPath,
-    CAT_CLI_CMD: `node ${fakeCliPath}`,
+    CONTEXTWEAVE_CONFIG: contextweaveConfigPath,
+    CONTEXTWEAVE_CLI_CMD: `node ${fakeCliPath}`,
     SOURCE_LANGUAGES: "eng",
     TARGET_LANGUAGES: "chi"
   });
@@ -30,12 +30,12 @@ test("translation manager stores returned book_id and reuses it with --book-id",
     source2: makeSrt("Goodbye.")
   });
   const registry = new BookRegistry(path.join(tmp, "book-registry.json"));
-  const catCli = new CatCli({
-    command: config.catCliCommand,
-    libraryRoot: config.catLibraryRoot,
-    configPath: config.catConfig
+  const contextweaveCli = new ContextweaveCli({
+    command: config.contextweaveCliCommand,
+    libraryRoot: config.contextweaveLibraryRoot,
+    configPath: config.contextweaveConfig
   });
-  const manager = new TranslationManager({ config, provider, registry, catCli });
+  const manager = new TranslationManager({ config, provider, registry, contextweaveCli });
   const mediaInfo = parseStremioId("series", "tt0944947:1:1");
 
   const first = await manager.requestTranslation({
@@ -73,11 +73,11 @@ test("translation manager stores returned book_id and reuses it with --book-id",
 
 test("translation manager serves request cache without redownloading source", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "cat-manager-cache-"));
-  const catConfigPath = path.join(tmp, "cat.yaml");
-  await fs.writeFile(catConfigPath, "version: 1\n", "utf8");
+  const contextweaveConfigPath = path.join(tmp, "contextweave.yaml");
+  await fs.writeFile(contextweaveConfigPath, "version: 1\n", "utf8");
   const config = loadConfig({
     DATA_DIR: tmp,
-    CAT_CONFIG: catConfigPath,
+    CONTEXTWEAVE_CONFIG: contextweaveConfigPath,
     SOURCE_LANGUAGES: "eng",
     TARGET_LANGUAGES: "chi"
   });
@@ -86,7 +86,7 @@ test("translation manager serves request cache without redownloading source", as
     config,
     provider,
     registry: new BookRegistry(path.join(tmp, "book-registry.json")),
-    catCli: new MemoryCatCli()
+    contextweaveCli: new MemoryContextweaveCli()
   });
   const mediaInfo = parseStremioId("series", "tt0944947:1:1");
 
@@ -103,89 +103,89 @@ test("translation manager serves request cache without redownloading source", as
 
 test("translation manager keeps one canonical translation per episode and target language", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "cat-manager-episode-key-"));
-  const catConfigPath = path.join(tmp, "cat.yaml");
-  await fs.writeFile(catConfigPath, "version: 1\n", "utf8");
+  const contextweaveConfigPath = path.join(tmp, "contextweave.yaml");
+  await fs.writeFile(contextweaveConfigPath, "version: 1\n", "utf8");
   const config = loadConfig({
     DATA_DIR: tmp,
-    CAT_CONFIG: catConfigPath,
+    CONTEXTWEAVE_CONFIG: contextweaveConfigPath,
     SOURCE_LANGUAGES: "eng",
     TARGET_LANGUAGES: "chi"
   });
   const provider = new CountingProvider({ source1: makeSrt("Hello."), source2: makeSrt("Different source text.") });
-  const catCli = new CountingMemoryCatCli();
+  const contextweaveCli = new CountingMemoryContextweaveCli();
   const manager = new TranslationManager({
     config,
     provider,
     registry: new BookRegistry(path.join(tmp, "book-registry.json")),
-    catCli
+    contextweaveCli
   });
   const mediaInfo = parseStremioId("series", "tt0944947:1:1");
 
   assert.equal((await manager.requestTranslation({ sourceFileId: "source1", targetLanguage: "chi", mediaInfo })).state, "loading");
   await manager.waitForAll();
-  assert.equal(catCli.calls, 1);
+  assert.equal(contextweaveCli.calls, 1);
 
   const cached = await manager.requestTranslation({ sourceFileId: "source2", targetLanguage: "chi", mediaInfo });
   assert.equal(cached.state, "complete");
   assert.match(cached.content, /Translated/);
-  assert.equal(catCli.calls, 1);
+  assert.equal(contextweaveCli.calls, 1);
 });
 
 test("translation manager reuses cached translation immediately for the same episode even if provider file id changes", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "cat-manager-source-hash-"));
-  const catConfigPath = path.join(tmp, "cat.yaml");
-  await fs.writeFile(catConfigPath, "version: 1\n", "utf8");
+  const contextweaveConfigPath = path.join(tmp, "contextweave.yaml");
+  await fs.writeFile(contextweaveConfigPath, "version: 1\n", "utf8");
   const config = loadConfig({
     DATA_DIR: tmp,
-    CAT_CONFIG: catConfigPath,
+    CONTEXTWEAVE_CONFIG: contextweaveConfigPath,
     SOURCE_LANGUAGES: "eng",
     TARGET_LANGUAGES: "chi"
   });
-  const firstCatCli = new CountingMemoryCatCli();
+  const firstContextweaveCli = new CountingMemoryContextweaveCli();
   const firstManager = new TranslationManager({
     config,
     provider: new CountingProvider({ source1: makeSrt("Hello.") }),
     registry: new BookRegistry(path.join(tmp, "book-registry.json")),
-    catCli: firstCatCli
+    contextweaveCli: firstContextweaveCli
   });
   const mediaInfo = parseStremioId("series", "tt0944947:1:1");
 
   assert.equal((await firstManager.requestTranslation({ sourceFileId: "source1", targetLanguage: "chi", mediaInfo })).state, "loading");
   await firstManager.waitForAll();
-  assert.equal(firstCatCli.calls, 1);
+  assert.equal(firstContextweaveCli.calls, 1);
 
-  const secondCatCli = new CountingMemoryCatCli();
+  const secondContextweaveCli = new CountingMemoryContextweaveCli();
   const secondProvider = new CountingProvider({ source2: makeSrt("Hello.") });
   const secondManager = new TranslationManager({
     config,
     provider: secondProvider,
     registry: new BookRegistry(path.join(tmp, "book-registry.json")),
-    catCli: secondCatCli
+    contextweaveCli: secondContextweaveCli
   });
 
   const cached = await secondManager.requestTranslation({ sourceFileId: "source2", targetLanguage: "chi", mediaInfo });
   assert.equal(cached.state, "complete");
   assert.match(cached.content, /Translated/);
   assert.equal(secondProvider.downloadCount, 0);
-  assert.equal(secondCatCli.calls, 0);
+  assert.equal(secondContextweaveCli.calls, 0);
 });
 
-test("translation manager does not store cat-cli failures as final cache", async () => {
+test("translation manager does not store contextweave-cli failures as final cache", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "cat-manager-fail-"));
-  const catConfigPath = path.join(tmp, "cat.yaml");
-  await fs.writeFile(catConfigPath, "version: 1\n", "utf8");
+  const contextweaveConfigPath = path.join(tmp, "contextweave.yaml");
+  await fs.writeFile(contextweaveConfigPath, "version: 1\n", "utf8");
   const config = loadConfig({
     DATA_DIR: tmp,
-    CAT_CONFIG: catConfigPath,
+    CONTEXTWEAVE_CONFIG: contextweaveConfigPath,
     SOURCE_LANGUAGES: "eng",
     TARGET_LANGUAGES: "chi"
   });
-  const catCli = new FlakyCatCli();
+  const contextweaveCli = new FlakyContextweaveCli();
   const manager = new TranslationManager({
     config,
     provider: new CountingProvider({ source1: makeSrt("Hello.") }),
     registry: new BookRegistry(path.join(tmp, "book-registry.json")),
-    catCli
+    contextweaveCli
   });
   const mediaInfo = parseStremioId("series", "tt0944947:1:1");
 
@@ -197,47 +197,47 @@ test("translation manager does not store cat-cli failures as final cache", async
   const retry = await manager.requestTranslation({ sourceFileId: "source1", targetLanguage: "chi", mediaInfo });
   assert.equal(retry.state, "loading");
   await manager.waitForAll();
-  assert.equal(catCli.calls, 2);
+  assert.equal(contextweaveCli.calls, 2);
 });
 
-test("translation manager recovers an existing CAT book when addon registry is empty", async () => {
+test("translation manager recovers an existing ContextWeave book when addon registry is empty", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "cat-manager-recover-"));
-  const catConfigPath = path.join(tmp, "cat.yaml");
-  await fs.writeFile(catConfigPath, "version: 1\n", "utf8");
+  const contextweaveConfigPath = path.join(tmp, "contextweave.yaml");
+  await fs.writeFile(contextweaveConfigPath, "version: 1\n", "utf8");
   const config = loadConfig({
     DATA_DIR: tmp,
-    CAT_CONFIG: catConfigPath,
+    CONTEXTWEAVE_CONFIG: contextweaveConfigPath,
     SOURCE_LANGUAGES: "eng",
     TARGET_LANGUAGES: "chi"
   });
   const provider = new FakeProvider({ source1: makeSrt("Hello.") });
   const registry = new BookRegistry(path.join(tmp, "book-registry.json"));
-  const catCli = new RecoveringCatCli();
-  const manager = new TranslationManager({ config, provider, registry, catCli });
+  const contextweaveCli = new RecoveringContextweaveCli();
+  const manager = new TranslationManager({ config, provider, registry, contextweaveCli });
   const mediaInfo = parseStremioId("series", "tt14596630:1:1");
 
   assert.equal((await manager.requestTranslation({ sourceFileId: "source1", targetLanguage: "chi", mediaInfo })).state, "loading");
   await manager.waitForAll();
 
-  assert.equal(catCli.calls.length, 1);
-  assert.equal(catCli.calls[0].bookId, "series-tt14596630-chi-finished");
-  assert.equal(catCli.calls[0].bookName, "");
+  assert.equal(contextweaveCli.calls.length, 1);
+  assert.equal(contextweaveCli.calls[0].bookId, "series-tt14596630-chi-finished");
+  assert.equal(contextweaveCli.calls[0].bookName, "");
   assert.equal((await registry.get(mediaContextKey(mediaInfo, "chi"))).bookId, "series-tt14596630-chi-finished");
 });
 
-test("translation manager remembers book_id from failed CAT runs and reuses it on retry", async () => {
+test("translation manager remembers book_id from failed ContextWeave runs and reuses it on retry", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "cat-manager-failed-book-"));
-  const fakeCliPath = path.join(tmp, "failing-cat-cli.js");
+  const fakeCliPath = path.join(tmp, "failing-contextweave-cli.js");
   const callsPath = path.join(tmp, "calls.json");
-  const catConfigPath = path.join(tmp, "cat.yaml");
-  await fs.writeFile(catConfigPath, "version: 1\n", "utf8");
+  const contextweaveConfigPath = path.join(tmp, "contextweave.yaml");
+  await fs.writeFile(contextweaveConfigPath, "version: 1\n", "utf8");
   await fs.writeFile(fakeCliPath, failingCliScript(), "utf8");
-  process.env.FAKE_CAT_CALLS = callsPath;
+  process.env.FAKE_CONTEXTWEAVE_CALLS = callsPath;
 
   const config = loadConfig({
     DATA_DIR: tmp,
-    CAT_CONFIG: catConfigPath,
-    CAT_CLI_CMD: `node ${fakeCliPath}`,
+    CONTEXTWEAVE_CONFIG: contextweaveConfigPath,
+    CONTEXTWEAVE_CLI_CMD: `node ${fakeCliPath}`,
     SOURCE_LANGUAGES: "eng",
     TARGET_LANGUAGES: "chi"
   });
@@ -246,12 +246,12 @@ test("translation manager remembers book_id from failed CAT runs and reuses it o
     source2: makeSrt("Goodbye.")
   });
   const registry = new BookRegistry(path.join(tmp, "book-registry.json"));
-  const catCli = new CatCli({
-    command: config.catCliCommand,
-    libraryRoot: config.catLibraryRoot,
-    configPath: config.catConfig
+  const contextweaveCli = new ContextweaveCli({
+    command: config.contextweaveCliCommand,
+    libraryRoot: config.contextweaveLibraryRoot,
+    configPath: config.contextweaveConfig
   });
-  const manager = new TranslationManager({ config, provider, registry, catCli });
+  const manager = new TranslationManager({ config, provider, registry, contextweaveCli });
   const mediaInfo = parseStremioId("series", "tt0944947:1:1");
 
   assert.equal((await manager.requestTranslation({ sourceFileId: "source1", targetLanguage: "chi", mediaInfo })).state, "loading");
@@ -304,14 +304,14 @@ class CountingProvider extends FakeProvider {
   }
 }
 
-class MemoryCatCli {
+class MemoryContextweaveCli {
   async run(options) {
     await fs.writeFile(options.outputPath, makeSrt("Translated."), "utf8");
     return { book_id: options.bookId || "memory-book" };
   }
 }
 
-class CountingMemoryCatCli extends MemoryCatCli {
+class CountingMemoryContextweaveCli extends MemoryContextweaveCli {
   constructor() {
     super();
     this.calls = 0;
@@ -323,20 +323,20 @@ class CountingMemoryCatCli extends MemoryCatCli {
   }
 }
 
-class FlakyCatCli {
+class FlakyContextweaveCli {
   constructor() {
     this.calls = 0;
   }
 
   async run(options) {
     this.calls += 1;
-    if (this.calls === 1) throw new Error("temporary CAT failure");
+    if (this.calls === 1) throw new Error("temporary ContextWeave failure");
     await fs.writeFile(options.outputPath, makeSrt("Translated after retry."), "utf8");
     return { book_id: options.bookId || "flaky-book" };
   }
 }
 
-class RecoveringCatCli extends MemoryCatCli {
+class RecoveringContextweaveCli extends MemoryContextweaveCli {
   constructor() {
     super();
     this.calls = [];
@@ -389,7 +389,7 @@ function fakeCliScript() {
 const fs = require("node:fs");
 const path = require("node:path");
 const args = process.argv.slice(2);
-const callsPath = process.env.FAKE_CAT_CALLS;
+const callsPath = process.env.FAKE_CONTEXTWEAVE_CALLS;
 const calls = fs.existsSync(callsPath) ? JSON.parse(fs.readFileSync(callsPath, "utf8")) : [];
 calls.push(args);
 fs.writeFileSync(callsPath, JSON.stringify(calls, null, 2));
@@ -439,7 +439,7 @@ function failingCliScript() {
 const fs = require("node:fs");
 const path = require("node:path");
 const args = process.argv.slice(2);
-const callsPath = process.env.FAKE_CAT_CALLS;
+const callsPath = process.env.FAKE_CONTEXTWEAVE_CALLS;
 const calls = fs.existsSync(callsPath) ? JSON.parse(fs.readFileSync(callsPath, "utf8")) : [];
 calls.push(args);
 fs.writeFileSync(callsPath, JSON.stringify(calls, null, 2));

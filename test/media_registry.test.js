@@ -4,7 +4,7 @@ const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 const { BookRegistry } = require("../src/bookRegistry");
-const { buildCatCliArgs, splitCommand } = require("../src/catCli");
+const { buildContextweaveCliArgs, splitCommand } = require("../src/contextweaveCli");
 const { mediaContextKey, parseStremioId } = require("../src/media");
 
 test("series context key ignores season and episode", () => {
@@ -56,23 +56,23 @@ test("book registry persists book ids", async () => {
   assert.equal((await reloaded.get("series:tt1:chi")).bookId, "book-1");
 });
 
-test("cat-cli args use config only when creating a new book", () => {
-  const createArgs = buildCatCliArgs({
+test("contextweave-cli args use config only when creating a new book", () => {
+  const createArgs = buildContextweaveCliArgs({
     libraryRoot: "/library",
-    configPath: "/cat.yaml",
+    configPath: "/contextweave.yaml",
     inputPath: "/in.srt",
     outputPath: "/out.srt",
     bookName: "Series tt1 -> chi",
     format: "srt"
   });
 
-  assert.deepEqual(createArgs.slice(0, 5), ["--library-root", "/library", "--config", "/cat.yaml", "--json"]);
+  assert.deepEqual(createArgs.slice(0, 5), ["--library-root", "/library", "--config", "/contextweave.yaml", "--json"]);
   assert.equal(createArgs.includes("--book-name"), true);
   assert.equal(createArgs.includes("--book-id"), false);
 
-  const reuseArgs = buildCatCliArgs({
+  const reuseArgs = buildContextweaveCliArgs({
     libraryRoot: "/library",
-    configPath: "/cat.yaml",
+    configPath: "/contextweave.yaml",
     inputPath: "/in.srt",
     outputPath: "/out.srt",
     bookId: "book-1",
@@ -84,10 +84,10 @@ test("cat-cli args use config only when creating a new book", () => {
   assert.equal(reuseArgs.includes("--config"), false);
 });
 
-test("cat-cli args can disable polish for subtitle jobs", () => {
-  const args = buildCatCliArgs({
+test("contextweave-cli args can disable polish for subtitle jobs", () => {
+  const args = buildContextweaveCliArgs({
     libraryRoot: "/library",
-    configPath: "/cat.yaml",
+    configPath: "/contextweave.yaml",
     inputPath: "/in.srt",
     outputPath: "/out.srt",
     bookName: "Series tt1 -> chi",
@@ -98,12 +98,12 @@ test("cat-cli args can disable polish for subtitle jobs", () => {
   assert.deepEqual(args.slice(4, 7), ["--json", "run", "--no-polish"]);
 });
 
-test("CAT_CLI_CMD splitting supports quoted args", () => {
-  assert.deepEqual(splitCommand('uv --directory "checkout/context aware" run cat-cli'), [
+test("CONTEXTWEAVE_CLI_CMD splitting supports quoted args", () => {
+  assert.deepEqual(splitCommand('uv --directory "checkout/context aware" run contextweave-cli'), [
     "uv",
     "--directory",
     "checkout/context aware",
     "run",
-    "cat-cli"
+    "contextweave-cli"
   ]);
 });

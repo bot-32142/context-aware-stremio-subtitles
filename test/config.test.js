@@ -23,9 +23,40 @@ test("advertisedBaseUrls lists RFC1918 LAN IPv4 addresses for wildcard host", ()
   assert.deepEqual(urls, ["http://10.0.0.31:7001", "http://192.168.1.50:7001"]);
 });
 
-test("translation stays disabled by default until CAT config is present", () => {
+test("translation stays disabled by default until ContextWeave config is present", () => {
   const config = loadConfig({});
   assert.equal(config.translationEnabled, false);
+});
+
+test("ContextWeave env vars configure translation", () => {
+  const config = loadConfig({
+    DATA_DIR: "/tmp/contextweave-config-test",
+    CONTEXTWEAVE_CONFIG: "/tmp/contextweave-config-test/contextweave.yaml",
+    CONTEXTWEAVE_CLI_CMD: "contextweave-cli --verbose",
+    CONTEXTWEAVE_LIBRARY_ROOT: "/tmp/contextweave-config-test/contextweave-library",
+    CONTEXTWEAVE_NO_POLISH: "true"
+  });
+
+  assert.equal(config.translationEnabled, true);
+  assert.equal(config.contextweaveCliCommand, "contextweave-cli --verbose");
+  assert.equal(config.contextweaveLibraryRoot, "/tmp/contextweave-config-test/contextweave-library");
+  assert.equal(config.contextweaveNoPolish, true);
+});
+
+test("legacy CAT env vars are ignored", () => {
+  const config = loadConfig({
+    DATA_DIR: "/tmp/contextweave-config-test",
+    CAT_CONFIG: "/tmp/contextweave-config-test/cat.yaml",
+    CAT_CLI_CMD: "cat-cli",
+    CAT_LIBRARY_ROOT: "/tmp/contextweave-config-test/legacy-library",
+    CAT_NO_POLISH: "true"
+  });
+
+  assert.equal(config.translationEnabled, false);
+  assert.equal(config.contextweaveConfig, "");
+  assert.equal(config.contextweaveCliCommand, "contextweave-cli");
+  assert.equal(config.contextweaveLibraryRoot, "/tmp/contextweave-config-test/cat-library");
+  assert.equal(config.contextweaveNoPolish, false);
 });
 
 test("TARGET_LANGUAGE accepts names and drives one target code", () => {

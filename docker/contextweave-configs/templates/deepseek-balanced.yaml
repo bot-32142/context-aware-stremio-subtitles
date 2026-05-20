@@ -1,7 +1,7 @@
-# Built-in CAT config template for Docker translation.
+# Built-in ContextWeave config template for Docker translation.
 # Rendered at container startup with target_language from TARGET_LANGUAGE.
 version: 1
-default_workflow_profile: budget_deepseek
+default_workflow_profile: balanced_deepseek
 
 connections:
   deepseek_flash:
@@ -27,11 +27,11 @@ connections:
     concurrency: 15
 
 workflow_profiles:
-  budget_deepseek:
-    profile_id: budget_deepseek
-    name: Budget DeepSeek
+  balanced_deepseek:
+    profile_id: balanced_deepseek
+    name: Balanced DeepSeek
     kind: shared
-    target_language: __CAT_TARGET_LANGUAGE__
+    target_language: __CONTEXTWEAVE_TARGET_LANGUAGE__
     routes:
       - step_id: extractor
         step_label: Extractor
@@ -56,8 +56,8 @@ workflow_profiles:
 
       - step_id: glossary_translator
         step_label: Glossary translator
-        connection_id: deepseek_flash
-        model: deepseek-v4-flash
+        connection_id: deepseek_pro
+        model: deepseek-v4-pro
         step_config:
           kwargs:
             extra_body:
@@ -66,8 +66,8 @@ workflow_profiles:
 
       - step_id: translator
         step_label: Translator
-        connection_id: deepseek_flash
-        model: deepseek-v4-flash
+        connection_id: deepseek_pro
+        model: deepseek-v4-pro
         step_config:
           chunk_size: 1000
           max_tokens_per_llm_call: 3500
@@ -79,8 +79,8 @@ workflow_profiles:
 
       - step_id: polish
         step_label: Polish
-        connection_id: deepseek_flash
-        model: deepseek-v4-flash
+        connection_id: deepseek_pro
+        model: deepseek-v4-pro
         step_config:
           kwargs:
             extra_body:

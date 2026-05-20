@@ -4,7 +4,7 @@ const { sha256 } = require("./hash");
 
 function splitCommand(command) {
   const input = String(command || "").trim();
-  if (!input) throw new Error("CAT_CLI_CMD is empty.");
+  if (!input) throw new Error("CONTEXTWEAVE_CLI_CMD is empty.");
 
   const parts = [];
   let current = "";
@@ -40,14 +40,14 @@ function splitCommand(command) {
     current += char;
   }
 
-  if (quote) throw new Error("CAT_CLI_CMD has an unterminated quote.");
+  if (quote) throw new Error("CONTEXTWEAVE_CLI_CMD has an unterminated quote.");
   if (escaping) current += "\\";
   if (current) parts.push(current);
-  if (!parts.length) throw new Error("CAT_CLI_CMD is empty.");
+  if (!parts.length) throw new Error("CONTEXTWEAVE_CLI_CMD is empty.");
   return parts;
 }
 
-function buildCatCliArgs(options) {
+function buildContextweaveCliArgs(options) {
   const args = [];
   if (options.libraryRoot) args.push("--library-root", options.libraryRoot);
   if (options.configPath && !options.bookId) args.push("--config", options.configPath);
@@ -64,7 +64,7 @@ function buildCatCliArgs(options) {
   return args;
 }
 
-async function catConfigFingerprint(configPath) {
+async function contextweaveConfigFingerprint(configPath) {
   if (!configPath) return "default";
   try {
     const content = await fs.readFile(configPath);
@@ -75,9 +75,9 @@ async function catConfigFingerprint(configPath) {
   }
 }
 
-class CatCli {
+class ContextweaveCli {
   constructor({ command, libraryRoot, configPath, noPolish = false, timeoutMs = 60 * 60 * 1000 }) {
-    const [bin, ...baseArgs] = splitCommand(command || "cat-cli");
+    const [bin, ...baseArgs] = splitCommand(command || "contextweave-cli");
     this.bin = bin;
     this.baseArgs = baseArgs;
     this.libraryRoot = libraryRoot;
@@ -89,7 +89,7 @@ class CatCli {
   async run(options) {
     return this._executeJson([
       ...this.baseArgs,
-      ...buildCatCliArgs({
+      ...buildContextweaveCliArgs({
         ...options,
         libraryRoot: this.libraryRoot,
         configPath: this.configPath,
@@ -121,18 +121,18 @@ class CatCli {
     try {
       payload = JSON.parse(stdout);
     } catch (error) {
-      throw new Error(`cat-cli returned non-JSON output: ${stdout.slice(0, 500)} ${stderr.slice(0, 500)}`.trim());
+      throw new Error(`contextweave-cli returned non-JSON output: ${stdout.slice(0, 500)} ${stderr.slice(0, 500)}`.trim());
     }
     if (!payload.ok) {
-      throw buildCatCliError(payload, { exitCode, stderr, stdout });
+      throw buildContextweaveCliError(payload, { exitCode, stderr, stdout });
     }
     return payload.data || {};
   }
 }
 
-function buildCatCliError(payload, { exitCode, stderr, stdout }) {
+function buildContextweaveCliError(payload, { exitCode, stderr, stdout }) {
   const details = payload?.error?.details && typeof payload.error.details === "object" ? payload.error.details : {};
-  const message = payload?.error?.message || `cat-cli exited with ${exitCode}: ${stderr || stdout}`.trim() || "cat-cli failed.";
+  const message = payload?.error?.message || `contextweave-cli exited with ${exitCode}: ${stderr || stdout}`.trim() || "contextweave-cli failed.";
   const error = new Error(message);
   error.details = details;
   error.exitCode = exitCode;
@@ -162,7 +162,7 @@ function spawnCollect(bin, args, timeoutMs) {
       if (settled) return;
       settled = true;
       child.kill("SIGTERM");
-      reject(new Error(`cat-cli timed out after ${timeoutMs}ms.`));
+      reject(new Error(`contextweave-cli timed out after ${timeoutMs}ms.`));
     }, timeoutMs);
 
     child.stdout.setEncoding("utf8");
@@ -184,7 +184,7 @@ function spawnCollect(bin, args, timeoutMs) {
       settled = true;
       clearTimeout(timer);
       if (code !== 0) {
-        const error = new Error(`cat-cli exited with ${code}: ${stderr || stdout}`.trim());
+        const error = new Error(`contextweave-cli exited with ${code}: ${stderr || stdout}`.trim());
         error.exitCode = code;
         error.stdout = stdout;
         error.stderr = stderr;
@@ -197,8 +197,8 @@ function spawnCollect(bin, args, timeoutMs) {
 }
 
 module.exports = {
-  CatCli,
-  buildCatCliArgs,
-  catConfigFingerprint,
+  ContextweaveCli,
+  buildContextweaveCliArgs,
+  contextweaveConfigFingerprint,
   splitCommand
 };

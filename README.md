@@ -1,6 +1,6 @@
 # Context-Aware Stremio Subtitles
 
-Local Stremio subtitle addon. It fetches subtitles from Stremio-compatible subtitle providers and translates selected subtitles with `cat-cli`.
+Local Stremio subtitle addon. It fetches subtitles from Stremio-compatible subtitle providers and translates selected subtitles with `contextweave-cli`.
 
 ## Quick Start
 
@@ -21,7 +21,7 @@ The addon also responds on:
 
 ## Motivation
 
-The addon uses [CAT](https://github.com/bot-32142/context-aware-translation) to ensure that **all terminologies are consistently translated** across different season and episode in a show. (Tests have been performed across multiple books/shows and no inconsistency in translation has been found so far.) In addition, it is recommended to **translate in chronological order** as CAT uses translation order to handle context summary and injection.
+The addon uses [ContextWeave](https://pypi.org/project/contextweave/) to ensure that **all terminologies are consistently translated** across different season and episode in a show. (Tests have been performed across multiple books/shows and no inconsistency in translation has been found so far.) In addition, it is recommended to **translate in chronological order** as ContextWeave uses translation order to handle context summary and injection.
 
 The tradeoff is speed: translated subtitles are slower than plain subtitle results.
 
@@ -38,7 +38,7 @@ Minimal `.env` for translated subtitles:
 HOST_PORT=7001
 TARGET_LANGUAGE=Chinese
 DEEPSEEK_API_KEY=sk-your-deepseek-key
-CAT_PROFILE_FILE=./docker/profiles/translation-deepseek-budget.env
+CONTEXTWEAVE_PROFILE_FILE=./docker/profiles/translation-deepseek-budget.env
 ```
 
 Then start it with:
@@ -52,12 +52,12 @@ docker compose -f docker-compose.yml -f docker-compose.translation.yml up -d --b
 | Variable | What it does |
 | --- | --- |
 | `TARGET_LANGUAGE` | One target language for translated subtitles. Examples: `Chinese`, `English`, `Spanish`, `Japanese`, `Korean`, `Traditional Chinese`, `eng`, `spa`, `chi`. |
-| `DEEPSEEK_API_KEY` | Required for the built-in DeepSeek CAT profiles. |
-| `CAT_PROFILE_FILE` | Translation profile. Usually `./docker/profiles/translation-deepseek-budget.env` or `./docker/profiles/translation-deepseek-balanced.env`. |
+| `DEEPSEEK_API_KEY` | Required for the built-in DeepSeek ContextWeave profiles. |
+| `CONTEXTWEAVE_PROFILE_FILE` | Translation profile. Usually `./docker/profiles/translation-deepseek-budget.env` or `./docker/profiles/translation-deepseek-balanced.env`. |
 | `ADDON_PROFILE_FILE` | Subtitle provider profile. Default is `./docker/profiles/public.env`. |
 | `HOST_PORT` | Host port. Default is `7001`. |
 | `SUBTITLE_PROVIDERS` | Optional comma-separated override such as `opensubtitles-v3,scs` or `subdl,subsource`. |
-| `CAT_CONFIG_PATH` | Only used with `docker-compose.custom-cat-config.yml` when you want your own CAT config file. |
+| `CONTEXTWEAVE_CONFIG_PATH` | Only used with `docker-compose.custom-contextweave-config.yml` when you want your own ContextWeave config file. |
 
 Provider-specific optional keys:
 
@@ -84,10 +84,10 @@ TARGET_LANGUAGE=Spanish DEEPSEEK_API_KEY="sk-your-deepseek-key" docker compose -
 Balanced profile:
 
 ```bash
-CAT_PROFILE_FILE=./docker/profiles/translation-deepseek-balanced.env DEEPSEEK_API_KEY="sk-your-deepseek-key" docker compose -f docker-compose.yml -f docker-compose.translation.yml up -d --build
+CONTEXTWEAVE_PROFILE_FILE=./docker/profiles/translation-deepseek-balanced.env DEEPSEEK_API_KEY="sk-your-deepseek-key" docker compose -f docker-compose.yml -f docker-compose.translation.yml up -d --build
 ```
 
-Subtitle-only mode, no CAT translation:
+Subtitle-only mode, no ContextWeave translation:
 
 ```bash
 docker compose up -d --build
@@ -104,34 +104,35 @@ WYZIE_API_KEY=... \
 docker compose up -d --build
 ```
 
-Custom CAT config:
+Custom ContextWeave config:
 
 ```bash
-CAT_CONFIG_PATH=/path/to/cat.yaml \
+CONTEXTWEAVE_CONFIG_PATH=/path/to/contextweave.yaml \
 DEEPSEEK_API_KEY="sk-your-deepseek-key" \
-docker compose -f docker-compose.yml -f docker-compose.translation.yml -f docker-compose.custom-cat-config.yml up -d --build
+docker compose -f docker-compose.yml -f docker-compose.translation.yml -f docker-compose.custom-contextweave-config.yml up -d --build
 ```
 
-## CAT Profiles
+## ContextWeave Profiles
 
 - `translation-deepseek-budget.env`: default cheaper profile
 - `translation-deepseek-balanced.env`: more Pro usage
-- `docker-compose.custom-cat-config.yml`: use your own `cat.yaml`
+- `docker-compose.custom-contextweave-config.yml`: use your own `contextweave.yaml`
 
 The built-in Docker translation profiles already set:
 
 - `ENABLE_TRANSLATION=true`
-- `CAT_NO_POLISH=true`
-- `CAT_LIBRARY_ROOT=/data/cat-library`
+- `CONTEXTWEAVE_CLI_CMD=uvx --from contextweave --python 3.12 --torch-backend cpu contextweave-cli`
+- `CONTEXTWEAVE_NO_POLISH=true`
+- `CONTEXTWEAVE_LIBRARY_ROOT=/data/cat-library`
 - `TMP_DIR=/data/tmp`
 - `TRANSLATION_DIR=/data/translations`
 
 ## Notes
 
 - Data is persisted in `./data`.
-- The first translation can be slow while Docker and `uv` prepare the CAT environment.
+- The first translation can be slow while Docker and `uv` prepare the ContextWeave environment.
 - If your firewall blocks inbound TCP `7001`, allow that port for LAN access.
-- The addon reuses one CAT book per show and target language.
+- The addon reuses one ContextWeave book per show and target language.
 
 ## Tests
 

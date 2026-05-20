@@ -5,9 +5,9 @@ const path = require("node:path");
 const { spawn } = require("node:child_process");
 const { getLanguageLabel } = require("../src/languages");
 
-const TARGET_LANGUAGE_TOKEN = "__CAT_TARGET_LANGUAGE__";
+const TARGET_LANGUAGE_TOKEN = "__CONTEXTWEAVE_TARGET_LANGUAGE__";
 
-function resolveCatTargetLanguage(env = process.env) {
+function resolveContextweaveTargetLanguage(env = process.env) {
   const targetLanguage = String(env.TARGET_LANGUAGE || "").trim();
   if (targetLanguage) return languageNameForInput(targetLanguage);
 
@@ -36,15 +36,15 @@ function targetLanguageCount(env = process.env) {
 
 async function renderTemplates(options = {}) {
   const env = options.env || process.env;
-  const templateDir = options.templateDir || env.CAT_CONFIG_TEMPLATE_DIR || path.join(__dirname, "cat-configs", "templates");
-  const outputDir = options.outputDir || env.CAT_CONFIG_OUTPUT_DIR || path.join(env.DATA_DIR || "/data", "cat-configs");
+  const templateDir = options.templateDir || env.CONTEXTWEAVE_CONFIG_TEMPLATE_DIR || path.join(__dirname, "contextweave-configs", "templates");
+  const outputDir = options.outputDir || env.CONTEXTWEAVE_CONFIG_OUTPUT_DIR || path.join(env.DATA_DIR || "/data", "contextweave-configs");
   const logger = options.logger || console;
-  const targetLanguage = resolveCatTargetLanguage(env);
+  const targetLanguage = resolveContextweaveTargetLanguage(env);
   const replacement = quoteYamlString(targetLanguage);
 
   if (!env.TARGET_LANGUAGE && targetLanguageCount(env) > 1) {
     logger.warn(
-      `[cat-config] Multiple TARGET_LANGUAGES were provided; built-in CAT configs use the first one (${targetLanguage}).`
+      `[contextweave-config] Multiple TARGET_LANGUAGES were provided; built-in ContextWeave configs use the first one (${targetLanguage}).`
     );
   }
 
@@ -63,7 +63,7 @@ async function renderTemplates(options = {}) {
   }
 
   if (rendered.length && logger.info) {
-    logger.info(`[cat-config] Rendered ${rendered.length} CAT config(s) for ${targetLanguage}.`);
+    logger.info(`[contextweave-config] Rendered ${rendered.length} ContextWeave config(s) for ${targetLanguage}.`);
   }
   return { targetLanguage, rendered };
 }
@@ -137,7 +137,7 @@ if (require.main === module) {
 
 module.exports = {
   languageNameForInput,
-  resolveCatTargetLanguage,
+  resolveContextweaveTargetLanguage,
   renderTemplates,
   targetLanguageCount,
   writeFileIfChanged

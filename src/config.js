@@ -11,7 +11,11 @@ function expandHome(value) {
 
 function loadConfig(env = process.env) {
   const dataDir = path.resolve(expandHome(env.DATA_DIR || path.join(process.cwd(), "data")));
-  const catConfig = env.CAT_CONFIG ? path.resolve(expandHome(env.CAT_CONFIG)) : "";
+  const contextweaveConfigInput = env.CONTEXTWEAVE_CONFIG;
+  const contextweaveConfig = contextweaveConfigInput ? path.resolve(expandHome(contextweaveConfigInput)) : "";
+  const contextweaveLibraryRoot = path.resolve(
+    expandHome(env.CONTEXTWEAVE_LIBRARY_ROOT || path.join(dataDir, "cat-library"))
+  );
   const targetLanguageInput = env.TARGET_LANGUAGE || env.TARGET_LANGUAGES || "chi";
   const targetLanguages = parseLanguageList(targetLanguageInput, ["chi"]);
   return {
@@ -23,11 +27,11 @@ function loadConfig(env = process.env) {
     dataDir,
     tmpDir: path.resolve(expandHome(env.TMP_DIR || path.join(dataDir, "tmp"))),
     translationDir: path.resolve(expandHome(env.TRANSLATION_DIR || path.join(dataDir, "translations"))),
-    catLibraryRoot: path.resolve(expandHome(env.CAT_LIBRARY_ROOT || path.join(dataDir, "cat-library"))),
-    catConfig,
-    catCliCommand: env.CAT_CLI_CMD || "cat-cli",
-    catNoPolish: parseBooleanEnv(env.CAT_NO_POLISH, false),
-    translationEnabled: parseBooleanEnv(env.ENABLE_TRANSLATION, Boolean(catConfig)),
+    contextweaveLibraryRoot,
+    contextweaveConfig,
+    contextweaveCliCommand: env.CONTEXTWEAVE_CLI_CMD || "contextweave-cli",
+    contextweaveNoPolish: parseBooleanEnv(env.CONTEXTWEAVE_NO_POLISH, false),
+    translationEnabled: parseBooleanEnv(env.ENABLE_TRANSLATION, Boolean(contextweaveConfig)),
     sourceLanguages: parseLanguageList(env.SOURCE_LANGUAGES || "eng", ["eng"]),
     targetLanguages,
     targetLanguageNames: targetLanguageNames(targetLanguageInput, targetLanguages),

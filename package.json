@@ -1,7 +1,7 @@
 {
   "name": "context-aware-stremio-subtitles",
   "version": "0.1.0",
-  "description": "LAN-hosted Stremio subtitle addon that fetches subtitles and translates them through cat-cli.",
+  "description": "LAN-hosted Stremio subtitle addon that fetches subtitles and translates them through contextweave-cli.",
   "license": "AGPL-3.0-only",
   "main": "src/server.js",
   "scripts": {

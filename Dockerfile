@@ -21,10 +21,10 @@ ENV NODE_ENV=production \
     DATA_DIR=/data \
     TMP_DIR=/data/tmp \
     TRANSLATION_DIR=/data/translations \
-    CAT_LIBRARY_ROOT=/data/cat-library \
+    CONTEXTWEAVE_LIBRARY_ROOT=/data/cat-library \
     UV_CACHE_DIR=/data/uv-cache \
     UV_PYTHON_INSTALL_DIR=/data/uv-python \
-    UV_PROJECT_ENVIRONMENT=/data/cat-venv \
+    UV_PROJECT_ENVIRONMENT=/data/contextweave-venv \
     UV_TORCH_BACKEND=cpu
 
 RUN mkdir -p /data && chown -R node:node /app /data
@@ -35,5 +35,5 @@ EXPOSE 7001
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:' + (process.env.PORT || 7001) + '/healthz').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
 
-ENTRYPOINT ["node", "docker/render-cat-configs.js"]
+ENTRYPOINT ["node", "docker/render-contextweave-configs.js"]
 CMD ["node", "src/server.js"]

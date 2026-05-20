@@ -1,17 +1,17 @@
 const fs = require("node:fs/promises");
 const path = require("node:path");
-const { catConfigFingerprint } = require("./catCli");
+const { contextweaveConfigFingerprint } = require("./contextweaveCli");
 const { mediaBookName, mediaContextKey, mediaTranslationKey } = require("./media");
 const { sha256, sha256Buffer } = require("./hash");
 const { detectSubtitleFormat, normalizeSubtitleFormat } = require("./subtitleFormat");
 const { errorSubtitle, loadingSubtitle } = require("./subtitleMessages");
 
 class TranslationManager {
-  constructor({ config, provider, registry, catCli }) {
+  constructor({ config, provider, registry, contextweaveCli }) {
     this.config = config;
     this.provider = provider;
     this.registry = registry;
-    this.catCli = catCli;
+    this.contextweaveCli = contextweaveCli;
     this.inFlight = new Map();
     this.bookLocks = new Map();
   }
@@ -19,7 +19,7 @@ class TranslationManager {
   async requestTranslation({ sourceFileId, targetLanguage, mediaInfo, filename = "", sourceLanguage = "" }) {
     const registryKey = mediaContextKey(mediaInfo, targetLanguage);
     const translationKey = mediaTranslationKey(mediaInfo, targetLanguage);
-    const fingerprint = await catConfigFingerprint(this.config.catConfig);
+    const fingerprint = await contextweaveConfigFingerprint(this.config.contextweaveConfig);
     const requestKey = this._requestKey({ translationKey });
     const cachedByRequest = await this._readCachedByRequestKey(requestKey);
     if (cachedByRequest) {
@@ -120,7 +120,7 @@ class TranslationManager {
       await this._withBookLock(job.registryKey, async () => {
         const registryEntry = await this._resolveRegistryEntry(job);
         try {
-          const data = await this.catCli.run({
+          const data = await this.contextweaveCli.run({
             inputPath,
             outputPath,
             format: job.format,
@@ -135,7 +135,7 @@ class TranslationManager {
       });
 
       const translated = await fs.readFile(outputPath, "utf8");
-      if (!translated.trim()) throw new Error("cat-cli produced an empty subtitle file.");
+      if (!translated.trim()) throw new Error("contextweave-cli produced an empty subtitle file.");
       await fs.mkdir(path.dirname(job.finalPath), { recursive: true });
       await fs.writeFile(job.finalPath, translated, "utf8");
     } finally {
@@ -158,10 +158,10 @@ class TranslationManager {
   }
 
   async _recoverBookFromCatLibrary(job) {
-    if (typeof this.catCli.listBooks !== "function") return null;
+    if (typeof this.contextweaveCli.listBooks !== "function") return null;
 
     try {
-      const books = await this.catCli.listBooks();
+      const books = await this.contextweaveCli.listBooks();
       const candidate = selectReusableBook(books, job.mediaInfo, job.targetLanguage);
       if (!candidate?.bookId) return null;
       return await this.registry.set(job.registryKey, {
@@ -170,7 +170,7 @@ class TranslationManager {
         targetLanguage: job.targetLanguage,
         mediaRootId: job.mediaInfo.rootId,
         mediaType: job.mediaInfo.type,
-        catConfigFingerprint: job.fingerprint,
+        contextweaveConfigFingerprint: job.fingerprint,
         createdAt: new Date().toISOString(),
         lastUsedAt: new Date().toISOString()
       });
@@ -192,7 +192,7 @@ class TranslationManager {
       targetLanguage: job.targetLanguage,
       mediaRootId: job.mediaInfo.rootId,
       mediaType: job.mediaInfo.type,
-      catConfigFingerprint: job.fingerprint,
+      contextweaveConfigFingerprint: job.fingerprint,
       createdAt: new Date().toISOString(),
       lastUsedAt: new Date().toISOString()
     });
@@ -332,7 +332,8 @@ module.exports = {
 
 function isReusableRegistryEntry(entry, fingerprint) {
   if (!entry?.bookId) return false;
-  if (entry.catConfigFingerprint && entry.catConfigFingerprint !== fingerprint) return false;
+  const entryFingerprint = entry.contextweaveConfigFingerprint || entry.catConfigFingerprint || "";
+  if (entryFingerprint && entryFingerprint !== fingerprint) return false;
   return true;
 }
 

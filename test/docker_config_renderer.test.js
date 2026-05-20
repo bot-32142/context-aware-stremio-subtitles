@@ -3,27 +3,27 @@ const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
-const { resolveCatTargetLanguage, renderTemplates } = require("../docker/render-cat-configs");
+const { resolveContextweaveTargetLanguage, renderTemplates } = require("../docker/render-contextweave-configs");
 
-test("Docker CAT renderer derives target language from TARGET_LANGUAGE", () => {
-  assert.equal(resolveCatTargetLanguage({ TARGET_LANGUAGE: "Spanish" }), "Spanish");
-  assert.equal(resolveCatTargetLanguage({ TARGET_LANGUAGE: "eng" }), "English");
-  assert.equal(resolveCatTargetLanguage({ TARGET_LANGUAGE: "ja" }), "Japanese");
+test("Docker ContextWeave renderer derives target language from TARGET_LANGUAGE", () => {
+  assert.equal(resolveContextweaveTargetLanguage({ TARGET_LANGUAGE: "Spanish" }), "Spanish");
+  assert.equal(resolveContextweaveTargetLanguage({ TARGET_LANGUAGE: "eng" }), "English");
+  assert.equal(resolveContextweaveTargetLanguage({ TARGET_LANGUAGE: "ja" }), "Japanese");
 });
 
-test("Docker CAT renderer accepts target language variants", () => {
-  assert.equal(resolveCatTargetLanguage({ TARGET_LANGUAGE: "Traditional Chinese" }), "Traditional Chinese");
-  assert.equal(resolveCatTargetLanguage({ TARGET_LANGUAGE: "zht" }), "Traditional Chinese");
+test("Docker ContextWeave renderer accepts target language variants", () => {
+  assert.equal(resolveContextweaveTargetLanguage({ TARGET_LANGUAGE: "Traditional Chinese" }), "Traditional Chinese");
+  assert.equal(resolveContextweaveTargetLanguage({ TARGET_LANGUAGE: "zht" }), "Traditional Chinese");
 });
 
-test("Docker CAT renderer writes generated configs without needless rewrites", async () => {
+test("Docker ContextWeave renderer writes generated configs without needless rewrites", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "cat-renderer-"));
   const templateDir = path.join(tmp, "templates");
   const outputDir = path.join(tmp, "generated");
   await fs.mkdir(templateDir, { recursive: true });
   await fs.writeFile(
     path.join(templateDir, "profile.yaml"),
-    "version: 1\nworkflow_profiles:\n  profile:\n    target_language: __CAT_TARGET_LANGUAGE__\n",
+    "version: 1\nworkflow_profiles:\n  profile:\n    target_language: __CONTEXTWEAVE_TARGET_LANGUAGE__\n",
     "utf8"
   );
 
