@@ -1,5 +1,5 @@
 # Built-in ContextWeave config template for Docker translation.
-# Rendered at container startup with target_language from TARGET_LANGUAGE.
+# Rendered at container startup with a ContextWeave target preset derived from TARGET_LANGUAGE.
 version: 1
 default_workflow_profile: budget_deepseek
 

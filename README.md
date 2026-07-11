@@ -51,7 +51,8 @@ docker compose -f docker-compose.yml -f docker-compose.translation.yml up -d --b
 
 | Variable | What it does |
 | --- | --- |
-| `TARGET_LANGUAGE` | One target language for translated subtitles. Examples: `Chinese`, `English`, `Spanish`, `Japanese`, `Korean`, `Traditional Chinese`, `eng`, `spa`, `chi`. |
+| `TARGET_LANGUAGE` | One target language for translated subtitles. Accepts names, ISO codes, or ContextWeave presets such as `Spanish`, `spa`, `Español`, and `中文（繁體）`. |
+| `SOURCE_LANGUAGES` | Comma-separated source subtitle filters using names or ISO codes, for example `eng,jpn`. ContextWeave detects the selected subtitle's actual source language. |
 | `DEEPSEEK_API_KEY` | Required for the built-in DeepSeek ContextWeave profiles. |
 | `CONTEXTWEAVE_PROFILE_FILE` | Translation profile. Usually `./docker/profiles/translation-deepseek-budget.env` or `./docker/profiles/translation-deepseek-balanced.env`. |
 | `ADDON_PROFILE_FILE` | Subtitle provider profile. Default is `./docker/profiles/public.env`. |
@@ -121,7 +122,7 @@ docker compose -f docker-compose.yml -f docker-compose.translation.yml -f docker
 The built-in Docker translation profiles already set:
 
 - `ENABLE_TRANSLATION=true`
-- `CONTEXTWEAVE_CLI_CMD=uvx --from contextweave --python 3.12 --torch-backend cpu contextweave-cli`
+- `CONTEXTWEAVE_CLI_CMD=uvx --from contextweave==0.3.1 --python 3.12 --torch-backend cpu contextweave-cli`
 - `CONTEXTWEAVE_NO_POLISH=true`
 - `CONTEXTWEAVE_LIBRARY_ROOT=/data/cat-library`
 - `TMP_DIR=/data/tmp`
@@ -131,6 +132,8 @@ The built-in Docker translation profiles already set:
 
 - Data is persisted in `./data`.
 - The first translation can be slow while Docker and `uv` prepare the ContextWeave environment.
+- The bundled profiles pin ContextWeave package `0.3.1` (the package shipped by the v2.8.2 release) and render `TARGET_LANGUAGE` into a validated native-script preset.
+- Existing books are reused only when their stored target matches that preset; incompatible legacy books are left intact and replaced with a compatible book.
 - If your firewall blocks inbound TCP `7001`, allow that port for LAN access.
 - The addon reuses one ContextWeave book per show and target language.
 
