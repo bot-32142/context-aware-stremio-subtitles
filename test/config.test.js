@@ -68,3 +68,11 @@ test("TARGET_LANGUAGE accepts names and drives one target code", () => {
   assert.deepEqual(traditionalChinese.targetLanguages, ["chi"]);
   assert.equal(traditionalChinese.targetLanguageNames.chi, "Traditional Chinese");
 });
+
+test("source and target language inputs cover newer ContextWeave presets", () => {
+  const config = loadConfig({ SOURCE_LANGUAGES: "bn,Japanese,sl", TARGET_LANGUAGE: "Swahili" });
+
+  assert.deepEqual(config.sourceLanguages, ["ben", "jpn", "slv"]);
+  assert.deepEqual(config.targetLanguages, ["swa"]);
+  assert.equal(config.targetLanguageNames.swa, "Swahili");
+});

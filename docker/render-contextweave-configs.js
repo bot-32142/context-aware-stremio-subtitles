@@ -3,7 +3,7 @@
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
-const { getLanguageLabel } = require("../src/languages");
+const { getContextWeaveTargetLanguage } = require("../src/languages");
 
 const TARGET_LANGUAGE_TOKEN = "__CONTEXTWEAVE_TARGET_LANGUAGE__";
 
@@ -16,7 +16,7 @@ function resolveContextweaveTargetLanguage(env = process.env) {
 }
 
 function languageNameForInput(value) {
-  return getLanguageLabel(String(value || "").trim() || "chi");
+  return getContextWeaveTargetLanguage(String(value || "").trim() || "chi");
 }
 
 function firstRawTargetLanguage(env = process.env) {

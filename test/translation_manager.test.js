@@ -225,6 +225,33 @@ test("translation manager recovers an existing ContextWeave book when addon regi
   assert.equal((await registry.get(mediaContextKey(mediaInfo, "chi"))).bookId, "series-tt14596630-chi-finished");
 });
 
+test("translation manager does not recover a book with a legacy target language", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "contextweave-manager-legacy-book-"));
+  const contextweaveConfigPath = path.join(tmp, "contextweave.yaml");
+  await fs.writeFile(contextweaveConfigPath, "version: 1\n", "utf8");
+  const config = loadConfig({
+    DATA_DIR: tmp,
+    CONTEXTWEAVE_CONFIG: contextweaveConfigPath,
+    SOURCE_LANGUAGES: "eng",
+    TARGET_LANGUAGES: "chi"
+  });
+  const contextweaveCli = new LegacyRecoveringContextweaveCli();
+  const manager = new TranslationManager({
+    config,
+    provider: new FakeProvider({ source1: makeSrt("Hello.") }),
+    registry: new BookRegistry(path.join(tmp, "book-registry.json")),
+    contextweaveCli
+  });
+  const mediaInfo = parseStremioId("series", "tt14596630:1:1");
+
+  assert.equal((await manager.requestTranslation({ sourceFileId: "source1", targetLanguage: "chi", mediaInfo })).state, "loading");
+  await manager.waitForAll();
+
+  assert.equal(contextweaveCli.calls.length, 1);
+  assert.equal(contextweaveCli.calls[0].bookId, "");
+  assert.equal(contextweaveCli.calls[0].bookName, "Series tt14596630 -> chi");
+});
+
 test("translation manager remembers book_id from failed ContextWeave runs and reuses it on retry", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "cat-manager-failed-book-"));
   const fakeCliPath = path.join(tmp, "failing-contextweave-cli.js");
@@ -349,6 +376,7 @@ class RecoveringContextweaveCli extends MemoryContextweaveCli {
           project_id: "series-tt14596630-chi-finished",
           name: "Series tt14596630 -> chi"
         },
+        target_language: "中文（简体）",
         progress_summary: "10/10 translated",
         modified_at: 200
       },
@@ -357,6 +385,7 @@ class RecoveringContextweaveCli extends MemoryContextweaveCli {
           project_id: "series-tt14596630-alt",
           name: "Series tt14596630 (NVUJDEZU6IUUOD02) -> chi"
         },
+        target_language: "中文（简体）",
         progress_summary: "10/10 translated",
         modified_at: 300
       },
@@ -365,8 +394,35 @@ class RecoveringContextweaveCli extends MemoryContextweaveCli {
           project_id: "movie-tt0111161-chi-finished",
           name: "Movie tt0111161 -> chi"
         },
+        target_language: "中文（简体）",
         progress_summary: "100/100 translated",
         modified_at: 500
+      }
+    ];
+  }
+
+  async run(options) {
+    this.calls.push({ ...options });
+    return super.run(options);
+  }
+}
+
+class LegacyRecoveringContextweaveCli extends MemoryContextweaveCli {
+  constructor() {
+    super();
+    this.calls = [];
+  }
+
+  async listBooks() {
+    return [
+      {
+        project: {
+          project_id: "legacy-series-book",
+          name: "Series tt14596630 -> chi"
+        },
+        target_language: "",
+        progress_summary: "10/10 translated",
+        modified_at: 200
       }
     ];
   }

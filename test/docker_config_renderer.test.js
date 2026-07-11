@@ -6,14 +6,25 @@ const test = require("node:test");
 const { resolveContextweaveTargetLanguage, renderTemplates } = require("../docker/render-contextweave-configs");
 
 test("Docker ContextWeave renderer derives target language from TARGET_LANGUAGE", () => {
-  assert.equal(resolveContextweaveTargetLanguage({ TARGET_LANGUAGE: "Spanish" }), "Spanish");
+  assert.equal(resolveContextweaveTargetLanguage({ TARGET_LANGUAGE: "Spanish" }), "Español");
   assert.equal(resolveContextweaveTargetLanguage({ TARGET_LANGUAGE: "eng" }), "English");
-  assert.equal(resolveContextweaveTargetLanguage({ TARGET_LANGUAGE: "ja" }), "Japanese");
+  assert.equal(resolveContextweaveTargetLanguage({ TARGET_LANGUAGE: "ja" }), "日本語");
 });
 
 test("Docker ContextWeave renderer accepts target language variants", () => {
-  assert.equal(resolveContextweaveTargetLanguage({ TARGET_LANGUAGE: "Traditional Chinese" }), "Traditional Chinese");
-  assert.equal(resolveContextweaveTargetLanguage({ TARGET_LANGUAGE: "zht" }), "Traditional Chinese");
+  assert.equal(resolveContextweaveTargetLanguage({ TARGET_LANGUAGE: "Traditional Chinese" }), "中文（繁體）");
+  assert.equal(resolveContextweaveTargetLanguage({ TARGET_LANGUAGE: "zht" }), "中文（繁體）");
+  assert.equal(resolveContextweaveTargetLanguage({ TARGET_LANGUAGE: "chi" }), "中文（简体）");
+  assert.equal(resolveContextweaveTargetLanguage({ TARGET_LANGUAGE: "中文（繁體）" }), "中文（繁體）");
+  assert.equal(resolveContextweaveTargetLanguage({ TARGET_LANGUAGE: "Español" }), "Español");
+  assert.equal(resolveContextweaveTargetLanguage({ TARGET_LANGUAGE: "sw" }), "Kiswahili");
+});
+
+test("Docker ContextWeave renderer rejects unsupported target presets", () => {
+  assert.throws(
+    () => resolveContextweaveTargetLanguage({ TARGET_LANGUAGE: "Catalan" }),
+    /not supported by ContextWeave/
+  );
 });
 
 test("Docker ContextWeave renderer writes generated configs without needless rewrites", async () => {
@@ -46,9 +57,9 @@ test("Docker ContextWeave renderer writes generated configs without needless rew
   });
   const secondStat = await fs.stat(outputPath);
 
-  assert.equal(first.targetLanguage, "Korean");
-  assert.equal(second.targetLanguage, "Korean");
-  assert.match(content, /target_language: "Korean"/);
+  assert.equal(first.targetLanguage, "한국어");
+  assert.equal(second.targetLanguage, "한국어");
+  assert.match(content, /target_language: "한국어"/);
   assert.deepEqual(first.rendered, [outputPath]);
   assert.equal(secondStat.mtimeMs, firstStat.mtimeMs);
 });

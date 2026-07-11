@@ -1,6 +1,7 @@
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { contextweaveConfigFingerprint } = require("./contextweaveCli");
+const { getContextWeaveTargetLanguage } = require("./languages");
 const { mediaBookName, mediaContextKey, mediaTranslationKey } = require("./media");
 const { sha256, sha256Buffer } = require("./hash");
 const { detectSubtitleFormat, normalizeSubtitleFormat } = require("./subtitleFormat");
@@ -162,7 +163,8 @@ class TranslationManager {
 
     try {
       const books = await this.contextweaveCli.listBooks();
-      const candidate = selectReusableBook(books, job.mediaInfo, job.targetLanguage);
+      const targetLanguageName = this.config.targetLanguageNames?.[job.targetLanguage] || job.targetLanguage;
+      const candidate = selectReusableBook(books, job.mediaInfo, job.targetLanguage, targetLanguageName);
       if (!candidate?.bookId) return null;
       return await this.registry.set(job.registryKey, {
         bookId: candidate.bookId,
@@ -337,11 +339,16 @@ function isReusableRegistryEntry(entry, fingerprint) {
   return true;
 }
 
-function selectReusableBook(books, mediaInfo, targetLanguage) {
+function selectReusableBook(books, mediaInfo, targetLanguage, targetLanguageName) {
   const expectedBookName = mediaBookName(mediaInfo, targetLanguage, "");
+  const expectedTargetLanguage = getContextWeaveTargetLanguage(targetLanguageName);
   const matches = books
     .map(item => toReusableBookCandidate(item, expectedBookName))
-    .filter(candidate => matchesMediaContext(candidate, mediaInfo, targetLanguage, expectedBookName))
+    .filter(
+      candidate =>
+        candidate.targetLanguage === expectedTargetLanguage &&
+        matchesMediaContext(candidate, mediaInfo, targetLanguage, expectedBookName)
+    )
     .sort(compareReusableBooks);
   return matches[0] || null;
 }
@@ -353,6 +360,7 @@ function toReusableBookCandidate(item, expectedBookName) {
   return {
     bookId,
     bookName,
+    targetLanguage: String(item?.target_language || ""),
     exactNameMatch: bookName === expectedBookName,
     translatedChunks: progress.translatedChunks,
     totalChunks: progress.totalChunks,
