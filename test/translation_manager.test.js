@@ -71,6 +71,66 @@ test("translation manager stores returned book_id and reuses it with --book-id",
   assert.equal(runCalls[1].includes("--config"), false);
 });
 
+test("translation manager rolls over a book when v1 rejects a duplicate imported document", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "contextweave-manager-duplicate-import-"));
+  const fakeCliPath = path.join(tmp, "duplicate-import-contextweave-cli.js");
+  const callsPath = path.join(tmp, "calls.json");
+  const contextweaveConfigPath = path.join(tmp, "contextweave.yaml");
+  await fs.writeFile(contextweaveConfigPath, "version: 1\n", "utf8");
+  await fs.writeFile(fakeCliPath, duplicateImportCliScript(), "utf8");
+  process.env.FAKE_CONTEXTWEAVE_CALLS = callsPath;
+
+  const config = loadConfig({
+    DATA_DIR: tmp,
+    CONTEXTWEAVE_CONFIG: contextweaveConfigPath,
+    CONTEXTWEAVE_CLI_CMD: `node ${fakeCliPath}`,
+    SOURCE_LANGUAGES: "eng",
+    TARGET_LANGUAGES: "chi"
+  });
+  const registry = new BookRegistry(path.join(tmp, "book-registry.json"));
+  const mediaInfo = parseStremioId("series", "tt0944947:1:1");
+  const registryKey = mediaContextKey(mediaInfo, "chi");
+  await registry.set(registryKey, {
+    bookId: "book-with-duplicate",
+    bookName: "Series tt0944947 -> chi",
+    targetLanguage: "chi",
+    mediaRootId: mediaInfo.rootId,
+    mediaType: mediaInfo.type
+  });
+  const manager = new TranslationManager({
+    config,
+    provider: new FakeProvider({ source1: makeSrt("Hello again.") }),
+    registry,
+    contextweaveCli: new ContextweaveCli({
+      command: config.contextweaveCliCommand,
+      libraryRoot: config.contextweaveLibraryRoot,
+      configPath: config.contextweaveConfig
+    })
+  });
+
+  const first = await manager.requestTranslation({ sourceFileId: "source1", targetLanguage: "chi", mediaInfo });
+  const concurrent = await manager.requestTranslation({ sourceFileId: "source1", targetLanguage: "chi", mediaInfo });
+  assert.equal(first.state, "loading");
+  assert.equal(concurrent.state, "loading");
+  await manager.waitForAll();
+
+  const calls = JSON.parse(await fs.readFile(callsPath, "utf8"));
+  const runCalls = calls.filter(args => args.includes("run"));
+  assert.equal(runCalls.length, 2);
+  assert.equal(runCalls[0][runCalls[0].indexOf("--book-id") + 1], "book-with-duplicate");
+  assert.equal(runCalls[0].includes("--config"), false);
+  assert.equal(runCalls[1].includes("--book-id"), false);
+  assert.equal(runCalls[1].includes("--book-name"), true);
+  assert.equal(runCalls[1].includes("--config"), true);
+  assert.equal((await registry.get(registryKey)).bookId, "book-after-duplicate");
+
+  const translated = await manager.requestTranslation({ sourceFileId: "source1", targetLanguage: "chi", mediaInfo });
+  assert.equal(translated.state, "complete");
+  assert.match(translated.content, /Translated after duplicate import/);
+  const callsAfterCacheHit = JSON.parse(await fs.readFile(callsPath, "utf8"));
+  assert.equal(callsAfterCacheHit.filter(args => args.includes("run")).length, 2);
+});
+
 test("translation manager serves request cache without redownloading source", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "cat-manager-cache-"));
   const contextweaveConfigPath = path.join(tmp, "contextweave.yaml");
@@ -552,6 +612,51 @@ console.log(JSON.stringify({
     project_id: args[bookIdIndex + 1],
     document_id: calls.length,
     task_id: "task-" + calls.length,
+    status: "completed",
+    output_path: outputPath
+  },
+  warnings: []
+}));
+`;
+}
+
+function duplicateImportCliScript() {
+  return `
+const fs = require("node:fs");
+const args = process.argv.slice(2);
+const callsPath = process.env.FAKE_CONTEXTWEAVE_CALLS;
+const calls = fs.existsSync(callsPath) ? JSON.parse(fs.readFileSync(callsPath, "utf8")) : [];
+calls.push(args);
+fs.writeFileSync(callsPath, JSON.stringify(calls, null, 2));
+
+const bookIdIndex = args.indexOf("--book-id");
+if (bookIdIndex >= 0) {
+  console.log(JSON.stringify({
+    ok: false,
+    command: "run",
+    error: {
+      code: "unsupported_import",
+      message: "contextweave-cli run expects exactly one imported document in v1.",
+      details: {
+        imported_count: 0,
+        book_id: args[bookIdIndex + 1]
+      }
+    },
+    warnings: []
+  }));
+  process.exit(4);
+}
+
+const outputPath = args[args.indexOf("--output") + 1];
+fs.writeFileSync(outputPath, "1\\n00:00:01,000 --> 00:00:02,000\\nTranslated after duplicate import.\\n", "utf8");
+console.log(JSON.stringify({
+  ok: true,
+  command: "run",
+  data: {
+    book_id: "book-after-duplicate",
+    project_id: "book-after-duplicate",
+    document_id: 1,
+    task_id: "task-after-duplicate",
     status: "completed",
     output_path: outputPath
   },

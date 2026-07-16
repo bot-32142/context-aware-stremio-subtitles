@@ -134,6 +134,7 @@ function buildContextweaveCliError(payload, { exitCode, stderr, stdout }) {
   const details = payload?.error?.details && typeof payload.error.details === "object" ? payload.error.details : {};
   const message = payload?.error?.message || `contextweave-cli exited with ${exitCode}: ${stderr || stdout}`.trim() || "contextweave-cli failed.";
   const error = new Error(message);
+  error.code = String(payload?.error?.code || "");
   error.details = details;
   error.exitCode = exitCode;
   error.stdout = stdout;

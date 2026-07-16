@@ -120,18 +120,39 @@ class TranslationManager {
     try {
       await this._withBookLock(job.registryKey, async () => {
         const registryEntry = await this._resolveRegistryEntry(job);
+        const bookName = mediaBookName(job.mediaInfo, job.targetLanguage, job.filename);
         try {
           const data = await this.contextweaveCli.run({
             inputPath,
             outputPath,
             format: job.format,
             bookId: registryEntry?.bookId || "",
-            bookName: registryEntry ? "" : mediaBookName(job.mediaInfo, job.targetLanguage, job.filename)
+            bookName: registryEntry ? "" : bookName
           });
           await this._rememberBook(job, registryEntry, data.book_id || data.project_id || "");
         } catch (error) {
           await this._rememberBook(job, registryEntry, error.bookId || error.projectId || error.details?.book_id || error.details?.project_id || "");
-          throw error;
+          if (!registryEntry?.bookId || !isDuplicateImportError(error)) throw error;
+
+          // ContextWeave v1 cannot rerun an input already imported into a book.
+          // Roll over to a fresh book so retries can make progress again.
+          try {
+            const data = await this.contextweaveCli.run({
+              inputPath,
+              outputPath,
+              format: job.format,
+              bookId: "",
+              bookName
+            });
+            await this._rememberBook(job, null, data.book_id || data.project_id || "");
+          } catch (retryError) {
+            await this._rememberBook(
+              job,
+              null,
+              retryError.bookId || retryError.projectId || retryError.details?.book_id || retryError.details?.project_id || ""
+            );
+            throw retryError;
+          }
         }
       });
 
@@ -391,5 +412,14 @@ function compareReusableBooks(left, right) {
     right.totalChunks - left.totalChunks ||
     right.modifiedAt - left.modifiedAt ||
     left.bookId.localeCompare(right.bookId)
+  );
+}
+
+function isDuplicateImportError(error) {
+  const importedCount = Number(error?.details?.imported_count);
+  if (importedCount !== 0) return false;
+  return (
+    error?.code === "unsupported_import" ||
+    error?.message === "contextweave-cli run expects exactly one imported document in v1."
   );
 }
