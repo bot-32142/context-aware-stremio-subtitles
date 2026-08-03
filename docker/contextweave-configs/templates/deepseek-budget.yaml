@@ -15,17 +15,6 @@ connections:
     max_retries: 3
     concurrency: 2500
 
-  deepseek_pro:
-    display_name: DeepSeek V4 Pro
-    provider: deepseek
-    api_key_env: DEEPSEEK_API_KEY
-    base_url: https://api.deepseek.com
-    default_model: deepseek-v4-pro
-    temperature: 0
-    timeout: 300
-    max_retries: 3
-    concurrency: 500
-
 workflow_profiles:
   budget_deepseek:
     profile_id: budget_deepseek
@@ -89,8 +78,8 @@ workflow_profiles:
 
       - step_id: reviewer
         step_label: Reviewer
-        connection_id: deepseek_pro
-        model: deepseek-v4-pro
+        connection_id: deepseek_flash
+        model: deepseek-v4-flash
         step_config:
           kwargs:
             extra_body:
