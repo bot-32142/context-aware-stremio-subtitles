@@ -82,7 +82,7 @@ Budget profile, Spanish:
 TARGET_LANGUAGE=Spanish DEEPSEEK_API_KEY="sk-your-deepseek-key" docker compose -f docker-compose.yml -f docker-compose.translation.yml up -d --build
 ```
 
-Balanced profile:
+Alternate Flash profile:
 
 ```bash
 CONTEXTWEAVE_PROFILE_FILE=./docker/profiles/translation-deepseek-balanced.env DEEPSEEK_API_KEY="sk-your-deepseek-key" docker compose -f docker-compose.yml -f docker-compose.translation.yml up -d --build
@@ -115,8 +115,8 @@ docker compose -f docker-compose.yml -f docker-compose.translation.yml -f docker
 
 ## ContextWeave Profiles
 
-- `translation-deepseek-budget.env`: default cheaper profile
-- `translation-deepseek-balanced.env`: more Pro usage
+- `translation-deepseek-budget.env`: default V4 Flash-only profile
+- `translation-deepseek-balanced.env`: alternate V4 Flash-only profile (name retained for compatibility)
 - `docker-compose.custom-contextweave-config.yml`: use your own `contextweave.yaml`
 
 The built-in Docker translation profiles already set:

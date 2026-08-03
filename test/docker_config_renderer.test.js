@@ -27,6 +27,16 @@ test("Docker ContextWeave renderer rejects unsupported target presets", () => {
   );
 });
 
+test("bundled ContextWeave profiles route every step through DeepSeek V4 Flash", async () => {
+  const templateDir = path.join(__dirname, "..", "docker", "contextweave-configs", "templates");
+  for (const filename of ["deepseek-budget.yaml", "deepseek-balanced.yaml"]) {
+    const content = await fs.readFile(path.join(templateDir, filename), "utf8");
+    assert.doesNotMatch(content, /deepseek_pro|deepseek-v4-pro/);
+    assert.equal((content.match(/connection_id: deepseek_flash/g) || []).length, 6);
+    assert.equal((content.match(/model: deepseek-v4-flash/g) || []).length, 7);
+  }
+});
+
 test("Docker ContextWeave renderer writes generated configs without needless rewrites", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "cat-renderer-"));
   const templateDir = path.join(tmp, "templates");
